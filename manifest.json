@@ -6,7 +6,8 @@
   "permissions": [
     "storage",
     "activeTab",
-    "tabs"
+    "tabs",
+    "cookies"
   ],
   "host_permissions": [
     "https://*.instagram.com/*"
@@ -29,8 +30,12 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://*.instagram.com/*"],
-      "js": ["content/content.js"],
+      "matches": [
+        "https://*.instagram.com/*"
+      ],
+      "js": [
+        "content/content.js"
+      ],
       "run_at": "document_idle"
     }
   ]
