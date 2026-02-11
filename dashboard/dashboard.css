@@ -207,6 +207,14 @@ body {
     background-color: var(--accent);
 }
 
+.credit-text {
+    display: block;
+    margin-top: 12px;
+    text-align: center;
+    font-size: 11px;
+    color: var(--muted-foreground);
+}
+
 /* --- Main Content --- */
 .main {
     flex: 1;
