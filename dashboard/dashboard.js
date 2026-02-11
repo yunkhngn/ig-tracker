@@ -71,12 +71,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // --- Listen for progress from background ---
+  // --- Listen for progress + completion from content script ---
   chrome.runtime.onMessage.addListener((message) => {
     if (message.type === 'FETCH_PROGRESS' && message.progress) {
       const p = message.progress;
-      showStatus(`Đang lấy ${p.type === 'followers' ? 'followers' : 'following'}: ${p.fetched}/${p.total}`);
+      const pct = p.total > 0 ? Math.round((p.fetched / p.total) * 100) : 0;
+      const label = p.type === 'followers' ? 'followers' : 'following';
+      showStatus(`Đang lấy ${label}: ${p.fetched}/${p.total} (${pct}%)`);
       updateProgress(p.fetched, p.total);
+    } else if (message.type === 'FETCH_SUCCESS') {
+      const { userInfo, followers, following } = message.data;
+      handleFetchSuccess(userInfo, followers, following);
+    } else if (message.type === 'FETCH_ERROR') {
+      showError(message.error);
+      isFetching = false;
+      btnFetch.disabled = false;
+      hideStatus();
     }
   });
 
@@ -122,18 +132,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // --- Listen for completion events ---
-  chrome.runtime.onMessage.addListener((message) => {
-    if (message.type === 'FETCH_SUCCESS') {
-      const { userInfo, followers, following } = message.data;
-      handleFetchSuccess(userInfo, followers, following);
-    } else if (message.type === 'FETCH_ERROR') {
-      showError(message.error);
-      isFetching = false;
-      btnFetch.disabled = false;
-      hideStatus();
-    }
-  });
 
   async function handleFetchSuccess(userInfo, followers, following) {
     try {

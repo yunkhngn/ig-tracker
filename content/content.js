@@ -143,7 +143,7 @@
   }
 
   // Paginated fetch of followers or following
-  async function fetchList(userId, type) {
+  async function fetchList(userId, type, total) {
     const list = [];
     let maxId = null;
 
@@ -161,6 +161,12 @@
           profile_pic_url: u.profile_pic_url || '',
         });
       }
+
+      // Send progress update
+      chrome.runtime.sendMessage({
+        type: 'FETCH_PROGRESS',
+        progress: { type, fetched: list.length, total: total || 0 },
+      }).catch(() => {});
 
       if (!data.next_max_id) break;
       maxId = data.next_max_id;
@@ -199,11 +205,11 @@
           }
 
           console.log('[IG Tracker] Fetching followers...');
-          const followers = await fetchList(userInfo.id, 'followers');
+          const followers = await fetchList(userInfo.id, 'followers', userInfo.follower_count);
           console.log(`[IG Tracker] Got ${followers.length} followers`);
 
           console.log('[IG Tracker] Fetching following...');
-          const following = await fetchList(userInfo.id, 'following');
+          const following = await fetchList(userInfo.id, 'following', userInfo.following_count);
           console.log(`[IG Tracker] Got ${following.length} following`);
 
           chrome.runtime.sendMessage({
