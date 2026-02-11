@@ -4,14 +4,14 @@ A powerful Chrome Extension to track your Instagram followers, following lists, 
 
 ## Features
 
-- **📊 Dashboard Overview**: View your total followers, following count, and follow ratio at a glance.
-- **🕵️ Insights**:
+- **Dashboard Overview**: View your total followers, following count, and follow ratio at a glance.
+- **Insights**:
   - **Not Following Back**: See users you follow who don't follow you back.
   - **Not Followed Back**: See users who follow you but you don't follow back.
-- **📉 Track Changes**: Automatically detect gained and lost followers/following between scans.
-- **💾 Local Storage**: All data is stored locally on your device for maximum privacy.
-- **📂 Export Data**: Export your tracking history to JSON.
-- **👥 Multi-account Support**: Track statistics for multiple Instagram accounts.
+- **Track Changes**: Automatically detect gained and lost followers/following between scans.
+- **Local Storage**: All data is stored locally on your device for maximum privacy.
+- **Export Data**: Export your tracking history to JSON.
+- **Multi-account Support**: Track statistics for multiple Instagram accounts.
 
 ## Installation
 
