@@ -243,7 +243,7 @@ document.addEventListener('DOMContentLoaded', () => {
       .map(
         (u) => `
       <div class="user-item">
-        <img class="user-avatar" src="${u.profile_pic_url}" alt="" loading="lazy" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 40%22><rect fill=%22%2327272a%22 width=%2240%22 height=%2240%22/></svg>'">
+        ${avatarHtml(u)}
         <div class="user-info">
           <div class="user-username">${escapeHtml(u.username)}</div>
           <div class="user-fullname">${escapeHtml(u.full_name || '')}</div>
@@ -268,7 +268,7 @@ document.addEventListener('DOMContentLoaded', () => {
       .map(
         (u) => `
       <div class="user-item" data-username="${escapeHtml(u.username)}" data-fullname="${escapeHtml(u.full_name || '')}">
-        <img class="user-avatar" src="${u.profile_pic_url}" alt="" loading="lazy" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 40%22><rect fill=%22%2327272a%22 width=%2240%22 height=%2240%22/></svg>'">
+        ${avatarHtml(u)}
         <div class="user-info">
           <div class="user-username">${escapeHtml(u.username)}</div>
           <div class="user-fullname">${escapeHtml(u.full_name || '')}</div>
@@ -355,7 +355,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderMiniUser(u) {
     return `
       <div class="user-item">
-        <img class="user-avatar" src="${u.profile_pic_url}" alt="" loading="lazy" style="width:32px;height:32px" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 40%22><rect fill=%22%2327272a%22 width=%2240%22 height=%2240%22/></svg>'">
+        ${avatarHtml(u, 32)}
         <div class="user-info">
           <div class="user-username" style="font-size:13px">${escapeHtml(u.username)}</div>
         </div>
@@ -400,6 +400,31 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- Utilities ---
+
+  // Generate gradient avatar with user's initial
+  const AVATAR_GRADIENTS = [
+    ['#FF6B6B', '#EE5A24'], ['#A29BFE', '#6C5CE7'], ['#00B894', '#00CEC9'],
+    ['#FDCB6E', '#E17055'], ['#E056A0', '#F78FB3'], ['#6C5CE7', '#A29BFE'],
+    ['#00CEC9', '#81ECEC'], ['#FAB1A0', '#FF7979'], ['#55E6C1', '#58B19F'],
+    ['#3DC1D3', '#6C5CE7'], ['#F8C291', '#E55039'], ['#B8E994', '#78E08F'],
+  ];
+
+  function hashCode(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) - hash) + str.charCodeAt(i);
+      hash |= 0;
+    }
+    return Math.abs(hash);
+  }
+
+  function avatarHtml(user, size = 40) {
+    const initial = (user.username || '?')[0].toUpperCase();
+    const colors = AVATAR_GRADIENTS[hashCode(user.username) % AVATAR_GRADIENTS.length];
+    const fontSize = Math.round(size * 0.45);
+    return `<div class="user-avatar" style="width:${size}px;height:${size}px;min-width:${size}px;background:linear-gradient(135deg,${colors[0]},${colors[1]});display:flex;align-items:center;justify-content:center;font-weight:700;font-size:${fontSize}px;color:#fff;border-radius:50%;">${initial}</div>`;
+  }
+
   function formatNumber(num) {
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
     if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
