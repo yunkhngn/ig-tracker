@@ -165,7 +165,8 @@
       if (!data.next_max_id) break;
       maxId = data.next_max_id;
 
-      await new Promise((r) => setTimeout(r, 2000 + Math.random() * 1500));
+      // Rate limit — 1.0 - 1.5s between pages
+      await new Promise((r) => setTimeout(r, 1000 + Math.random() * 500));
     }
 
     return list;
@@ -179,6 +180,9 @@
     }
 
     if (msg.type === 'FETCH_DATA') {
+      // Return immediately to close the trigger channel
+      sendResponse({ success: true, status: 'started' });
+
       (async () => {
         try {
           console.log('[IG Tracker] Fetching data for:', msg.username);
@@ -186,7 +190,11 @@
           console.log('[IG Tracker] User found:', userInfo);
 
           if (userInfo.is_private) {
-            sendResponse({ success: false, error: 'PRIVATE_ACCOUNT', data: userInfo });
+            chrome.runtime.sendMessage({ 
+              type: 'FETCH_ERROR', 
+              error: 'PRIVATE_ACCOUNT', 
+              data: userInfo 
+            });
             return;
           }
 
@@ -198,16 +206,19 @@
           const following = await fetchList(userInfo.id, 'following');
           console.log(`[IG Tracker] Got ${following.length} following`);
 
-          sendResponse({
-            success: true,
+          chrome.runtime.sendMessage({
+            type: 'FETCH_SUCCESS',
             data: { userInfo, followers, following },
           });
         } catch (err) {
           console.error('[IG Tracker] Error:', err);
-          sendResponse({ success: false, error: err.message });
+          chrome.runtime.sendMessage({ 
+            type: 'FETCH_ERROR', 
+            error: err.message 
+          });
         }
       })();
-      return true;
+      return false; // Don't keep channel open
     }
 
     if (msg.type === 'FETCH_USER_INFO') {

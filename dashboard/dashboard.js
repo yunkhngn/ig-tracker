@@ -101,6 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
     showStatus('Đang kết nối với Instagram...');
 
     try {
+      // Trigger the fetch
       const response = await chrome.runtime.sendMessage({
         type: 'FETCH_DATA',
         username,
@@ -108,22 +109,45 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (!response || !response.success) {
         showError(response?.error || 'UNKNOWN');
+        isFetching = false;
+        btnFetch.disabled = false;
         return;
       }
+      
+      // Fetch started successfully, wait for events
+    } catch (err) {
+      showError(err.message);
+      isFetching = false;
+      btnFetch.disabled = false;
+    }
+  }
 
-      const { userInfo, followers, following } = response.data;
+  // --- Listen for completion events ---
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message.type === 'FETCH_SUCCESS') {
+      const { userInfo, followers, following } = message.data;
+      handleFetchSuccess(userInfo, followers, following);
+    } else if (message.type === 'FETCH_ERROR') {
+      showError(message.error);
+      isFetching = false;
+      btnFetch.disabled = false;
+      hideStatus();
+    }
+  });
 
+  async function handleFetchSuccess(userInfo, followers, following) {
+    try {
       // Save snapshot
       showStatus('Đang lưu dữ liệu...');
-      await Storage.saveSnapshot(username, followers, following);
+      await Storage.saveSnapshot(userInfo.username, followers, following);
 
       // Render everything
-      await renderAll(username);
+      await renderAll(userInfo.username);
 
       showStatus(`Hoàn tất! ${followers.length} followers, ${following.length} following`);
       setTimeout(hideStatus, 3000);
-    } catch (err) {
-      showError(err.message);
+    } catch (e) {
+      showError(e.message);
     } finally {
       isFetching = false;
       btnFetch.disabled = false;
