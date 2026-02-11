@@ -1,6 +1,6 @@
 /**
  * IG Tracker — Content Script (runs on instagram.com)
- * Has native access to IG cookies via credentials: 'include'
+ * Dynamically extracts x-ig-app-id from the page to avoid useragent mismatch
  */
 
 (() => {
@@ -9,22 +9,68 @@
     return match ? match[1] : null;
   }
 
-  // Make authenticated IG request
-  async function igFetch(url) {
+  // Extract the real x-ig-app-id from Instagram's own page scripts
+  function getAppId() {
+    // Method 1: check for __d in the page's JS config
+    try {
+      const scripts = document.querySelectorAll('script');
+      for (const s of scripts) {
+        const text = s.textContent || '';
+        // Look for "X-IG-App-ID" or "instagramWebDesktopFBAppId"
+        const match = text.match(/"X-IG-App-ID":"(\d+)"/);
+        if (match) return match[1];
+
+        const match2 = text.match(/instagramWebDesktopFBAppId['":\s]+['"](\d+)['"]/);
+        if (match2) return match2[1];
+
+        const match3 = text.match(/APP_ID['":\s]+['"](\d+)['"]/);
+        if (match3) return match3[1];
+      }
+    } catch {}
+
+    // Method 2: Try window.__initialData or similar globals
+    try {
+      if (window.__initialData?.app_id) return window.__initialData.app_id;
+    } catch {}
+
+    // Fallback — this is the commonly known app ID
+    return '936619743';
+  }
+
+  // Make authenticated IG request — no custom x-ig-app-id if not found
+  async function igFetch(url, skipAppId = false) {
     const csrf = getCSRFToken();
     if (!csrf) throw new Error('NOT_LOGGED_IN');
 
+    const headers = {
+      'x-csrftoken': csrf,
+      'x-requested-with': 'XMLHttpRequest',
+    };
+
+    // Only add app-id if we have a real one (to avoid useragent mismatch)
+    if (!skipAppId) {
+      const appId = getAppId();
+      if (appId) headers['x-ig-app-id'] = appId;
+    }
+
     const res = await fetch(url, {
-      headers: {
-        'x-csrftoken': csrf,
-        'x-ig-app-id': '936619743',
-        'x-requested-with': 'XMLHttpRequest',
-      },
+      headers,
       credentials: 'include',
     });
 
     if (res.status === 401 || res.status === 403) throw new Error('NOT_LOGGED_IN');
     if (res.status === 429) throw new Error('RATE_LIMITED');
+
+    // If we get useragent mismatch, retry WITHOUT x-ig-app-id
+    if (res.status === 400 && !skipAppId) {
+      const body = await res.text();
+      if (body.includes('useragent mismatch')) {
+        console.warn('[IG Tracker] useragent mismatch, retrying without x-ig-app-id');
+        return igFetch(url, true);
+      }
+      console.error(`[IG Tracker] 400 for ${url}:`, body.slice(0, 200));
+      throw new Error('HTTP_400');
+    }
 
     if (!res.ok) {
       const body = await res.text().catch(() => '');
@@ -39,9 +85,7 @@
   async function getUserInfo(username) {
     // Try web_profile_info first
     try {
-      const d = await igFetch(
-        `/api/v1/users/web_profile_info/?username=${username}`
-      );
+      const d = await igFetch(`/api/v1/users/web_profile_info/?username=${username}`);
       const u = d?.data?.user;
       if (u) return {
         id: u.id || String(u.pk),
@@ -58,9 +102,7 @@
 
     // Fallback: search
     try {
-      const d = await igFetch(
-        `/api/v1/web/search/topsearch/?query=${username}&context=blended`
-      );
+      const d = await igFetch(`/api/v1/web/search/topsearch/?query=${username}&context=blended`);
       const match = d?.users?.find(
         (x) => x.user?.username?.toLowerCase() === username.toLowerCase()
       );
@@ -78,6 +120,23 @@
       }
     } catch (e) {
       console.warn('[IG Tracker] search:', e.message);
+    }
+
+    // Fallback: profile page __a=1
+    try {
+      const d = await igFetch(`/${username}/?__a=1&__d=dis`);
+      const u = d?.graphql?.user || d?.user;
+      if (u) return {
+        id: u.id || String(u.pk),
+        username: u.username,
+        full_name: u.full_name || '',
+        profile_pic_url: u.profile_pic_url || '',
+        follower_count: u.edge_followed_by?.count ?? u.follower_count ?? 0,
+        following_count: u.edge_follow?.count ?? u.following_count ?? 0,
+        is_private: !!u.is_private,
+      };
+    } catch (e) {
+      console.warn('[IG Tracker] __a=1:', e.message);
     }
 
     throw new Error('USER_NOT_FOUND');
@@ -106,7 +165,6 @@
       if (!data.next_max_id) break;
       maxId = data.next_max_id;
 
-      // Rate limit — 2-3.5s between pages
       await new Promise((r) => setTimeout(r, 2000 + Math.random() * 1500));
     }
 
@@ -162,5 +220,5 @@
     return false;
   });
 
-  console.log('[IG Tracker] Content script loaded v5');
+  console.log('[IG Tracker] Content script v6 | AppID:', getAppId());
 })();
