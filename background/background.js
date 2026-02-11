@@ -1,225 +1,282 @@
 /**
  * IG Tracker — Background Service Worker
- * Makes API calls directly using host_permissions + cookies
+ * Uses chrome.scripting.executeScript to run fetches inside Instagram tabs
+ * This ensures full cookie/session context
  */
 
-// Get ALL Instagram cookies as a combined string
-async function getAllCookies() {
-  const cookies = await chrome.cookies.getAll({ domain: '.instagram.com' });
-  return cookies.map((c) => `${c.name}=${c.value}`).join('; ');
-}
-
-// Get CSRF token specifically
-async function getCSRFToken() {
-  const cookie = await chrome.cookies.get({
-    url: 'https://www.instagram.com',
-    name: 'csrftoken',
+// Find an Instagram tab or create one
+async function getInstagramTab() {
+  const tabs = await chrome.tabs.query({ url: 'https://*.instagram.com/*' });
+  if (tabs.length > 0) {
+    return tabs[0];
+  }
+  // Open Instagram in a new tab
+  const tab = await chrome.tabs.create({
+    url: 'https://www.instagram.com/',
+    active: false,
   });
-  return cookie?.value || null;
+  // Wait for tab to fully load
+  await new Promise((resolve) => {
+    const listener = (tabId, info) => {
+      if (tabId === tab.id && info.status === 'complete') {
+        chrome.tabs.onUpdated.removeListener(listener);
+        resolve();
+      }
+    };
+    chrome.tabs.onUpdated.addListener(listener);
+  });
+  await new Promise((r) => setTimeout(r, 2000));
+  return tab;
 }
 
-// Fetch from Instagram API with all cookies forwarded
-async function igFetch(url) {
-  const csrfToken = await getCSRFToken();
-  const allCookies = await getAllCookies();
+// Execute a function inside an Instagram tab
+async function executeInInstagramTab(func, args) {
+  const tab = await getInstagramTab();
+
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: func,
+    args: args || [],
+    world: 'MAIN', // Run in the page's main world to access cookies
+  });
+
+  if (results && results[0]) {
+    if (results[0].error) {
+      throw new Error(results[0].error.message || 'Script execution failed');
+    }
+    return results[0].result;
+  }
+  throw new Error('No result from script execution');
+}
+
+// --- Functions that run INSIDE the Instagram tab ---
+
+// Get user info by username (runs in IG tab context)
+async function fetchUserInfoInTab(username) {
+  const csrfToken = document.cookie
+    .split('; ')
+    .find((c) => c.startsWith('csrftoken='))
+    ?.split('=')[1];
 
   if (!csrfToken) {
-    throw new Error('NOT_LOGGED_IN');
+    return { error: 'NOT_LOGGED_IN' };
   }
 
-  // Check if sessionid exists in cookies
-  if (!allCookies.includes('sessionid=')) {
-    throw new Error('NOT_LOGGED_IN');
-  }
+  const headers = {
+    'x-csrftoken': csrfToken,
+    'x-ig-app-id': '936619743',
+    'x-requested-with': 'XMLHttpRequest',
+  };
 
-  console.log('[IG Tracker BG] Fetching:', url);
-  console.log('[IG Tracker BG] Cookies count:', allCookies.split(';').length);
-
-  const res = await fetch(url, {
-    headers: {
-      'x-csrftoken': csrfToken,
-      'x-ig-app-id': '936619743',
-      'x-requested-with': 'XMLHttpRequest',
-      'x-instagram-ajax': '1',
-      'cookie': allCookies,
-      'referer': 'https://www.instagram.com/',
-      'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-    },
-  });
-
-  console.log('[IG Tracker BG] Status:', res.status);
-
-  if (res.status === 401 || res.status === 403) {
-    throw new Error('NOT_LOGGED_IN');
-  }
-  if (res.status === 429) {
-    throw new Error('RATE_LIMITED');
-  }
-  if (!res.ok) {
-    let body = '';
-    try { body = await res.text(); } catch {}
-    console.error('[IG Tracker BG] Error:', res.status, body.substring(0, 500));
-    throw new Error(`HTTP_${res.status}`);
-  }
-
-  return res.json();
-}
-
-// Get user info — tries multiple methods
-async function getUserId(username) {
   // Method 1: web_profile_info
   try {
-    const data = await igFetch(
-      `https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(username)}`
+    const res = await fetch(
+      `https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(username)}`,
+      { headers, credentials: 'include' }
     );
-    const user = data?.data?.user;
-    if (user) {
-      return {
-        id: user.id || String(user.pk),
-        username: user.username,
-        full_name: user.full_name || '',
-        profile_pic_url: user.profile_pic_url || '',
-        follower_count: user.edge_followed_by?.count || user.follower_count || 0,
-        following_count: user.edge_follow?.count || user.following_count || 0,
-        is_private: user.is_private || false,
-      };
+    if (res.ok) {
+      const data = await res.json();
+      const user = data?.data?.user;
+      if (user) {
+        return {
+          success: true,
+          data: {
+            id: user.id || String(user.pk),
+            username: user.username,
+            full_name: user.full_name || '',
+            profile_pic_url: user.profile_pic_url || '',
+            follower_count: user.edge_followed_by?.count || user.follower_count || 0,
+            following_count: user.edge_follow?.count || user.following_count || 0,
+            is_private: user.is_private || false,
+          },
+        };
+      }
     }
   } catch (e) {
-    console.warn('[IG Tracker BG] web_profile_info failed:', e.message);
+    console.warn('[IG Tracker] web_profile_info failed:', e.message);
   }
 
   // Method 2: search
   try {
-    const data = await igFetch(
-      `https://www.instagram.com/api/v1/web/search/topsearch/?query=${encodeURIComponent(username)}&context=blended`
+    const res = await fetch(
+      `https://www.instagram.com/api/v1/web/search/topsearch/?query=${encodeURIComponent(username)}&context=blended`,
+      { headers, credentials: 'include' }
     );
-    const found = data?.users?.find(
-      (u) => u.user?.username?.toLowerCase() === username.toLowerCase()
-    );
-    if (found?.user) {
-      const u = found.user;
-      return {
-        id: String(u.pk || u.pk_id),
-        username: u.username,
-        full_name: u.full_name || '',
-        profile_pic_url: u.profile_pic_url || '',
-        follower_count: u.follower_count || 0,
-        following_count: u.following_count || 0,
-        is_private: u.is_private || false,
-      };
+    if (res.ok) {
+      const data = await res.json();
+      const found = data?.users?.find(
+        (u) => u.user?.username?.toLowerCase() === username.toLowerCase()
+      );
+      if (found?.user) {
+        const u = found.user;
+        return {
+          success: true,
+          data: {
+            id: String(u.pk || u.pk_id),
+            username: u.username,
+            full_name: u.full_name || '',
+            profile_pic_url: u.profile_pic_url || '',
+            follower_count: u.follower_count || 0,
+            following_count: u.following_count || 0,
+            is_private: u.is_private || false,
+          },
+        };
+      }
     }
   } catch (e) {
-    console.warn('[IG Tracker BG] search failed:', e.message);
+    console.warn('[IG Tracker] search failed:', e.message);
   }
 
-  // Method 3: __a=1
+  return { error: 'USER_NOT_FOUND' };
+}
+
+// Fetch one page of followers (runs in IG tab context)
+async function fetchFollowersPageInTab(userId, maxId) {
+  const csrfToken = document.cookie
+    .split('; ')
+    .find((c) => c.startsWith('csrftoken='))
+    ?.split('=')[1];
+
+  let url = `https://www.instagram.com/api/v1/friendships/${userId}/followers/?count=50`;
+  if (maxId) url += `&max_id=${maxId}`;
+
   try {
-    const data = await igFetch(
-      `https://www.instagram.com/${encodeURIComponent(username)}/?__a=1&__d=dis`
-    );
-    const user = data?.graphql?.user || data?.user;
-    if (user) {
-      return {
-        id: user.id || String(user.pk),
-        username: user.username,
-        full_name: user.full_name || '',
-        profile_pic_url: user.profile_pic_url || '',
-        follower_count: user.edge_followed_by?.count || user.follower_count || 0,
-        following_count: user.edge_follow?.count || user.following_count || 0,
-        is_private: user.is_private || false,
-      };
+    const res = await fetch(url, {
+      headers: {
+        'x-csrftoken': csrfToken,
+        'x-ig-app-id': '936619743',
+        'x-requested-with': 'XMLHttpRequest',
+      },
+      credentials: 'include',
+    });
+
+    if (!res.ok) {
+      return { error: `HTTP_${res.status}` };
     }
+
+    const data = await res.json();
+    const users = (data?.users || []).map((u) => ({
+      id: String(u.pk || u.pk_id || u.id),
+      username: u.username,
+      full_name: u.full_name || '',
+      profile_pic_url: u.profile_pic_url || '',
+    }));
+
+    return {
+      success: true,
+      users,
+      next_max_id: data.next_max_id || null,
+    };
   } catch (e) {
-    console.warn('[IG Tracker BG] __a=1 failed:', e.message);
+    return { error: e.message };
   }
-
-  throw new Error('USER_NOT_FOUND');
 }
 
-// Fetch followers (paginated)
-async function getFollowers(userId, count, sendProgress) {
-  const followers = [];
+// Fetch one page of following (runs in IG tab context)
+async function fetchFollowingPageInTab(userId, maxId) {
+  const csrfToken = document.cookie
+    .split('; ')
+    .find((c) => c.startsWith('csrftoken='))
+    ?.split('=')[1];
+
+  let url = `https://www.instagram.com/api/v1/friendships/${userId}/following/?count=50`;
+  if (maxId) url += `&max_id=${maxId}`;
+
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'x-csrftoken': csrfToken,
+        'x-ig-app-id': '936619743',
+        'x-requested-with': 'XMLHttpRequest',
+      },
+      credentials: 'include',
+    });
+
+    if (!res.ok) {
+      return { error: `HTTP_${res.status}` };
+    }
+
+    const data = await res.json();
+    const users = (data?.users || []).map((u) => ({
+      id: String(u.pk || u.pk_id || u.id),
+      username: u.username,
+      full_name: u.full_name || '',
+      profile_pic_url: u.profile_pic_url || '',
+    }));
+
+    return {
+      success: true,
+      users,
+      next_max_id: data.next_max_id || null,
+    };
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
+// --- Background worker orchestration ---
+
+async function fetchAllFollowers(userId, totalCount, sendProgress) {
+  const all = [];
   let maxId = null;
-  let hasMore = true;
 
-  while (hasMore) {
-    let url = `https://www.instagram.com/api/v1/friendships/${userId}/followers/?count=50`;
-    if (maxId) url += `&max_id=${maxId}`;
+  while (true) {
+    const result = await executeInInstagramTab(fetchFollowersPageInTab, [userId, maxId]);
 
-    const data = await igFetch(url);
-    const users = data?.users || [];
+    if (result.error) throw new Error(result.error);
 
-    for (const u of users) {
-      followers.push({
-        id: String(u.pk || u.pk_id || u.id),
-        username: u.username,
-        full_name: u.full_name || '',
-        profile_pic_url: u.profile_pic_url || '',
-      });
-    }
+    all.push(...result.users);
+    sendProgress({ type: 'followers', fetched: all.length, total: totalCount });
 
-    hasMore = !!data.next_max_id;
-    maxId = data.next_max_id;
+    if (!result.next_max_id) break;
+    maxId = result.next_max_id;
 
-    sendProgress({ type: 'followers', fetched: followers.length, total: count });
-
-    if (hasMore) {
-      await new Promise((r) => setTimeout(r, 2000 + Math.random() * 1500));
-    }
+    // Rate limit
+    await new Promise((r) => setTimeout(r, 2000 + Math.random() * 1500));
   }
 
-  return followers;
+  return all;
 }
 
-// Fetch following (paginated)
-async function getFollowing(userId, count, sendProgress) {
-  const following = [];
+async function fetchAllFollowing(userId, totalCount, sendProgress) {
+  const all = [];
   let maxId = null;
-  let hasMore = true;
 
-  while (hasMore) {
-    let url = `https://www.instagram.com/api/v1/friendships/${userId}/following/?count=50`;
-    if (maxId) url += `&max_id=${maxId}`;
+  while (true) {
+    const result = await executeInInstagramTab(fetchFollowingPageInTab, [userId, maxId]);
 
-    const data = await igFetch(url);
-    const users = data?.users || [];
+    if (result.error) throw new Error(result.error);
 
-    for (const u of users) {
-      following.push({
-        id: String(u.pk || u.pk_id || u.id),
-        username: u.username,
-        full_name: u.full_name || '',
-        profile_pic_url: u.profile_pic_url || '',
-      });
-    }
+    all.push(...result.users);
+    sendProgress({ type: 'following', fetched: all.length, total: totalCount });
 
-    hasMore = !!data.next_max_id;
-    maxId = data.next_max_id;
+    if (!result.next_max_id) break;
+    maxId = result.next_max_id;
 
-    sendProgress({ type: 'following', fetched: following.length, total: count });
-
-    if (hasMore) {
-      await new Promise((r) => setTimeout(r, 2000 + Math.random() * 1500));
-    }
+    await new Promise((r) => setTimeout(r, 2000 + Math.random() * 1500));
   }
 
-  return following;
+  return all;
 }
 
-// Handle messages from dashboard/popup
+// Handle messages
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'FETCH_DATA') {
     (async () => {
       try {
-        // Progress sender
         const sendProgress = (progress) => {
-          chrome.runtime.sendMessage({
-            type: 'FETCH_PROGRESS',
-            progress,
-          }).catch(() => {});
+          chrome.runtime.sendMessage({ type: 'FETCH_PROGRESS', progress }).catch(() => {});
         };
 
-        const userInfo = await getUserId(message.username);
+        // Get user info
+        const userResult = await executeInInstagramTab(fetchUserInfoInTab, [message.username]);
+
+        if (userResult.error) {
+          sendResponse({ success: false, error: userResult.error });
+          return;
+        }
+
+        const userInfo = userResult.data;
         console.log('[IG Tracker BG] User:', userInfo);
 
         if (userInfo.is_private) {
@@ -227,8 +284,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           return;
         }
 
-        const followers = await getFollowers(userInfo.id, userInfo.follower_count, sendProgress);
-        const following = await getFollowing(userInfo.id, userInfo.following_count, sendProgress);
+        const followers = await fetchAllFollowers(userInfo.id, userInfo.follower_count, sendProgress);
+        const following = await fetchAllFollowing(userInfo.id, userInfo.following_count, sendProgress);
 
         sendResponse({
           success: true,
@@ -243,13 +300,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'FETCH_USER_INFO') {
-    getUserId(message.username)
-      .then((info) => sendResponse({ success: true, data: info }))
-      .catch((err) => sendResponse({ success: false, error: err.message }));
+    (async () => {
+      try {
+        const result = await executeInInstagramTab(fetchUserInfoInTab, [message.username]);
+        if (result.error) {
+          sendResponse({ success: false, error: result.error });
+        } else {
+          sendResponse({ success: true, data: result.data });
+        }
+      } catch (err) {
+        sendResponse({ success: false, error: err.message });
+      }
+    })();
     return true;
   }
 
   return false;
 });
 
-console.log('[IG Tracker] Background service worker loaded v3');
+console.log('[IG Tracker] Background service worker loaded v4');
