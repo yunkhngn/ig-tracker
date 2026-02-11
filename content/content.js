@@ -1,7 +1,6 @@
 /**
  * IG Tracker — Content Script
  * Injected on instagram.com to access internal API with session cookies
- * Uses /api/v1/friendships/ REST endpoints
  */
 
 (() => {
@@ -13,23 +12,34 @@
     return cookie ? cookie.split('=')[1] : null;
   }
 
-  // Fetch with IG headers
+  // Try to get www-claim from cookie or meta tag
+  function getWWWClaim() {
+    try {
+      return sessionStorage.getItem('www-claim-v2') || '0';
+    } catch {
+      return '0';
+    }
+  }
+
+  // Fetch with IG headers — returns response object for better error handling
   async function igFetch(url) {
     const csrfToken = getCSRFToken();
     if (!csrfToken) {
       throw new Error('NOT_LOGGED_IN');
     }
 
+    console.log('[IG Tracker] Fetching:', url);
+
     const res = await fetch(url, {
       headers: {
         'x-csrftoken': csrfToken,
         'x-ig-app-id': '936619743',
         'x-requested-with': 'XMLHttpRequest',
-        'x-asbd-id': '129477',
-        'x-ig-www-claim': sessionStorage.getItem('www-claim-v2') || '0',
       },
       credentials: 'include',
     });
+
+    console.log('[IG Tracker] Response status:', res.status, 'for', url);
 
     if (res.status === 401 || res.status === 403) {
       throw new Error('NOT_LOGGED_IN');
@@ -38,28 +48,86 @@
       throw new Error('RATE_LIMITED');
     }
     if (!res.ok) {
+      // Try to read error body for debugging
+      let body = '';
+      try { body = await res.text(); } catch {}
+      console.error('[IG Tracker] Error body:', body.substring(0, 500));
       throw new Error(`HTTP_${res.status}`);
     }
 
     return res.json();
   }
 
-  // Get user ID from username
+  // Get user info by visiting their profile page and extracting shared_data
+  // Fallback: use the search endpoint
   async function getUserId(username) {
-    const data = await igFetch(
-      `https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(username)}`
-    );
-    const user = data?.data?.user;
-    if (!user) throw new Error('USER_NOT_FOUND');
-    return {
-      id: user.id,
-      username: user.username,
-      full_name: user.full_name,
-      profile_pic_url: user.profile_pic_url,
-      follower_count: user.edge_followed_by?.count || 0,
-      following_count: user.edge_follow?.count || 0,
-      is_private: user.is_private,
-    };
+    // Method 1: web_profile_info
+    try {
+      const data = await igFetch(
+        `https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(username)}`
+      );
+      const user = data?.data?.user;
+      if (user) {
+        return {
+          id: user.id,
+          username: user.username,
+          full_name: user.full_name,
+          profile_pic_url: user.profile_pic_url,
+          follower_count: user.edge_followed_by?.count || 0,
+          following_count: user.edge_follow?.count || 0,
+          is_private: user.is_private,
+        };
+      }
+    } catch (e) {
+      console.warn('[IG Tracker] web_profile_info failed:', e.message, '— trying search fallback');
+    }
+
+    // Method 2: search bar API
+    try {
+      const searchData = await igFetch(
+        `https://www.instagram.com/api/v1/web/search/topsearch/?query=${encodeURIComponent(username)}&context=blended`
+      );
+      const found = searchData?.users?.find(
+        (u) => u.user?.username?.toLowerCase() === username.toLowerCase()
+      );
+      if (found?.user) {
+        const u = found.user;
+        return {
+          id: String(u.pk || u.pk_id),
+          username: u.username,
+          full_name: u.full_name || '',
+          profile_pic_url: u.profile_pic_url || '',
+          follower_count: u.follower_count || 0,
+          following_count: u.following_count || 0,
+          is_private: u.is_private || false,
+        };
+      }
+    } catch (e) {
+      console.warn('[IG Tracker] search fallback failed:', e.message);
+    }
+
+    // Method 3: profile page scrape — get user ID from __a=1
+    try {
+      const data = await igFetch(
+        `https://www.instagram.com/${encodeURIComponent(username)}/?__a=1&__d=dis`
+      );
+      const user = data?.graphql?.user || data?.user;
+      if (user) {
+        return {
+          id: user.id || String(user.pk),
+          username: user.username,
+          full_name: user.full_name || '',
+          profile_pic_url: user.profile_pic_url || '',
+          follower_count: user.edge_followed_by?.count || user.follower_count || 0,
+          following_count: user.edge_follow?.count || user.following_count || 0,
+          is_private: user.is_private || false,
+        };
+      }
+    } catch (e) {
+      console.warn('[IG Tracker] __a=1 fallback failed:', e.message);
+    }
+
+    throw new Error('USER_NOT_FOUND');
   }
 
   // Fetch followers using /api/v1/friendships/ (paginated)
@@ -77,7 +145,7 @@
 
       for (const u of users) {
         followers.push({
-          id: u.pk || u.pk_id || u.id,
+          id: String(u.pk || u.pk_id || u.id),
           username: u.username,
           full_name: u.full_name || '',
           profile_pic_url: u.profile_pic_url || '',
@@ -95,9 +163,8 @@
         });
       }
 
-      // Rate limit: pause between requests
       if (hasMore) {
-        await new Promise((r) => setTimeout(r, 1500 + Math.random() * 1000));
+        await new Promise((r) => setTimeout(r, 2000 + Math.random() * 1500));
       }
     }
 
@@ -119,7 +186,7 @@
 
       for (const u of users) {
         following.push({
-          id: u.pk || u.pk_id || u.id,
+          id: String(u.pk || u.pk_id || u.id),
           username: u.username,
           full_name: u.full_name || '',
           profile_pic_url: u.profile_pic_url || '',
@@ -138,7 +205,7 @@
       }
 
       if (hasMore) {
-        await new Promise((r) => setTimeout(r, 1500 + Math.random() * 1000));
+        await new Promise((r) => setTimeout(r, 2000 + Math.random() * 1500));
       }
     }
 
@@ -165,6 +232,7 @@
       (async () => {
         try {
           const userInfo = await getUserId(message.username);
+          console.log('[IG Tracker] User info:', userInfo);
 
           if (userInfo.is_private) {
             sendResponse({
@@ -175,12 +243,11 @@
             return;
           }
 
-          // Send progress via runtime messages
           const progressCb = (progress) => {
             chrome.runtime.sendMessage({
               type: 'FETCH_PROGRESS',
               progress,
-            });
+            }).catch(() => {});
           };
 
           const followers = await getFollowers(
@@ -203,6 +270,7 @@
             },
           });
         } catch (err) {
+          console.error('[IG Tracker] Fetch error:', err);
           sendResponse({ success: false, error: err.message });
         }
       })();
@@ -212,5 +280,5 @@
     return false;
   });
 
-  console.log('[IG Tracker] Content script loaded');
+  console.log('[IG Tracker] Content script loaded v2');
 })();
