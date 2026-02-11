@@ -1,6 +1,7 @@
 /**
  * IG Tracker — Content Script
  * Injected on instagram.com to access internal API with session cookies
+ * Uses /api/v1/friendships/ REST endpoints
  */
 
 (() => {
@@ -10,12 +11,6 @@
       .split('; ')
       .find((c) => c.startsWith('csrftoken='));
     return cookie ? cookie.split('=')[1] : null;
-  }
-
-  // Get app ID from page meta or use default
-  function getAppId() {
-    const meta = document.querySelector('meta[property="al:ios:app_store_id"]');
-    return '936619743'; // Instagram app ID
   }
 
   // Fetch with IG headers
@@ -28,9 +23,10 @@
     const res = await fetch(url, {
       headers: {
         'x-csrftoken': csrfToken,
-        'x-ig-app-id': getAppId(),
+        'x-ig-app-id': '936619743',
         'x-requested-with': 'XMLHttpRequest',
         'x-asbd-id': '129477',
+        'x-ig-www-claim': sessionStorage.getItem('www-claim-v2') || '0',
       },
       credentials: 'include',
     });
@@ -51,7 +47,7 @@
   // Get user ID from username
   async function getUserId(username) {
     const data = await igFetch(
-      `https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`
+      `https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(username)}`
     );
     const user = data?.data?.user;
     if (!user) throw new Error('USER_NOT_FOUND');
@@ -66,43 +62,30 @@
     };
   }
 
-  // Fetch followers (paginated)
+  // Fetch followers using /api/v1/friendships/ (paginated)
   async function getFollowers(userId, count, onProgress) {
     const followers = [];
-    let after = null;
-    let hasNext = true;
-    const batchSize = 50;
+    let maxId = null;
+    let hasMore = true;
 
-    while (hasNext) {
-      const variables = {
-        id: userId,
-        include_reel: false,
-        fetch_mutual: false,
-        first: batchSize,
-      };
-      if (after) variables.after = after;
-
-      const url = `https://www.instagram.com/graphql/query/?query_hash=c76146de99bb02f6415203be841dd25a&variables=${encodeURIComponent(
-        JSON.stringify(variables)
-      )}`;
+    while (hasMore) {
+      let url = `https://www.instagram.com/api/v1/friendships/${userId}/followers/?count=50`;
+      if (maxId) url += `&max_id=${maxId}`;
 
       const data = await igFetch(url);
-      const edges =
-        data?.data?.user?.edge_followed_by?.edges || [];
-      const pageInfo =
-        data?.data?.user?.edge_followed_by?.page_info || {};
+      const users = data?.users || [];
 
-      for (const edge of edges) {
+      for (const u of users) {
         followers.push({
-          id: edge.node.id,
-          username: edge.node.username,
-          full_name: edge.node.full_name,
-          profile_pic_url: edge.node.profile_pic_url,
+          id: u.pk || u.pk_id || u.id,
+          username: u.username,
+          full_name: u.full_name || '',
+          profile_pic_url: u.profile_pic_url || '',
         });
       }
 
-      hasNext = pageInfo.has_next_page && edges.length > 0;
-      after = pageInfo.end_cursor;
+      hasMore = !!data.next_max_id;
+      maxId = data.next_max_id;
 
       if (onProgress) {
         onProgress({
@@ -113,7 +96,7 @@
       }
 
       // Rate limit: pause between requests
-      if (hasNext) {
+      if (hasMore) {
         await new Promise((r) => setTimeout(r, 1500 + Math.random() * 1000));
       }
     }
@@ -121,43 +104,30 @@
     return followers;
   }
 
-  // Fetch following (paginated)
+  // Fetch following using /api/v1/friendships/ (paginated)
   async function getFollowing(userId, count, onProgress) {
     const following = [];
-    let after = null;
-    let hasNext = true;
-    const batchSize = 50;
+    let maxId = null;
+    let hasMore = true;
 
-    while (hasNext) {
-      const variables = {
-        id: userId,
-        include_reel: false,
-        fetch_mutual: false,
-        first: batchSize,
-      };
-      if (after) variables.after = after;
-
-      const url = `https://www.instagram.com/graphql/query/?query_hash=d04b0a864b4b54837c0d870b0e77e076&variables=${encodeURIComponent(
-        JSON.stringify(variables)
-      )}`;
+    while (hasMore) {
+      let url = `https://www.instagram.com/api/v1/friendships/${userId}/following/?count=50`;
+      if (maxId) url += `&max_id=${maxId}`;
 
       const data = await igFetch(url);
-      const edges =
-        data?.data?.user?.edge_follow?.edges || [];
-      const pageInfo =
-        data?.data?.user?.edge_follow?.page_info || {};
+      const users = data?.users || [];
 
-      for (const edge of edges) {
+      for (const u of users) {
         following.push({
-          id: edge.node.id,
-          username: edge.node.username,
-          full_name: edge.node.full_name,
-          profile_pic_url: edge.node.profile_pic_url,
+          id: u.pk || u.pk_id || u.id,
+          username: u.username,
+          full_name: u.full_name || '',
+          profile_pic_url: u.profile_pic_url || '',
         });
       }
 
-      hasNext = pageInfo.has_next_page && edges.length > 0;
-      after = pageInfo.end_cursor;
+      hasMore = !!data.next_max_id;
+      maxId = data.next_max_id;
 
       if (onProgress) {
         onProgress({
@@ -167,7 +137,7 @@
         });
       }
 
-      if (hasNext) {
+      if (hasMore) {
         await new Promise((r) => setTimeout(r, 1500 + Math.random() * 1000));
       }
     }
@@ -188,7 +158,7 @@
         .catch((err) =>
           sendResponse({ success: false, error: err.message })
         );
-      return true; // async
+      return true;
     }
 
     if (message.type === 'FETCH_DATA') {
@@ -236,7 +206,7 @@
           sendResponse({ success: false, error: err.message });
         }
       })();
-      return true; // async
+      return true;
     }
 
     return false;
