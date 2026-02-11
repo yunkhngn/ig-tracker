@@ -3,7 +3,13 @@
  * Makes API calls directly using host_permissions + cookies
  */
 
-// Get CSRF token from Instagram cookies
+// Get ALL Instagram cookies as a combined string
+async function getAllCookies() {
+  const cookies = await chrome.cookies.getAll({ domain: '.instagram.com' });
+  return cookies.map((c) => `${c.name}=${c.value}`).join('; ');
+}
+
+// Get CSRF token specifically
 async function getCSRFToken() {
   const cookie = await chrome.cookies.get({
     url: 'https://www.instagram.com',
@@ -12,32 +18,32 @@ async function getCSRFToken() {
   return cookie?.value || null;
 }
 
-// Get session ID cookie
-async function getSessionId() {
-  const cookie = await chrome.cookies.get({
-    url: 'https://www.instagram.com',
-    name: 'sessionid',
-  });
-  return cookie?.value || null;
-}
-
-// Fetch from Instagram API (background SW has host_permissions → no CORS)
+// Fetch from Instagram API with all cookies forwarded
 async function igFetch(url) {
   const csrfToken = await getCSRFToken();
-  const sessionId = await getSessionId();
+  const allCookies = await getAllCookies();
 
-  if (!csrfToken || !sessionId) {
+  if (!csrfToken) {
+    throw new Error('NOT_LOGGED_IN');
+  }
+
+  // Check if sessionid exists in cookies
+  if (!allCookies.includes('sessionid=')) {
     throw new Error('NOT_LOGGED_IN');
   }
 
   console.log('[IG Tracker BG] Fetching:', url);
+  console.log('[IG Tracker BG] Cookies count:', allCookies.split(';').length);
 
   const res = await fetch(url, {
     headers: {
       'x-csrftoken': csrfToken,
       'x-ig-app-id': '936619743',
       'x-requested-with': 'XMLHttpRequest',
-      'cookie': `csrftoken=${csrfToken}; sessionid=${sessionId}`,
+      'x-instagram-ajax': '1',
+      'cookie': allCookies,
+      'referer': 'https://www.instagram.com/',
+      'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     },
   });
 
@@ -52,7 +58,7 @@ async function igFetch(url) {
   if (!res.ok) {
     let body = '';
     try { body = await res.text(); } catch {}
-    console.error('[IG Tracker BG] Error:', res.status, body.substring(0, 300));
+    console.error('[IG Tracker BG] Error:', res.status, body.substring(0, 500));
     throw new Error(`HTTP_${res.status}`);
   }
 
