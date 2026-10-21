@@ -44,6 +44,8 @@ document.addEventListener('DOMContentLoaded', () => {
       USER_NOT_FOUND: 'Không tìm thấy username này.',
       PRIVATE_ACCOUNT: 'Tài khoản này ở chế độ riêng tư.',
       CONTENT_SCRIPT_NOT_LOADED: 'Không kết nối được với Instagram. Hãy mở instagram.com và thử lại.',
+      CHECKPOINT_REQUIRED: 'Instagram yêu cầu xác minh tài khoản (Checkpoint). Hãy mở instagram.com để xác minh.',
+      FETCH_INCOMPLETE: 'Dữ liệu lấy về không đầy đủ do Instagram giới hạn. Hãy thử lại sau vài phút.',
     };
     errorText.textContent = messages[msg] || `Lỗi: ${msg}`;
     errorBar.classList.remove('hidden');
@@ -80,12 +82,20 @@ document.addEventListener('DOMContentLoaded', () => {
       showStatus(`Đang lấy ${label}: ${p.fetched}/${p.total} (${pct}%)`);
       updateProgress(p.fetched, p.total);
     } else if (message.type === 'FETCH_SUCCESS') {
-      const { userInfo, followers, following } = message.data;
-      handleFetchSuccess(userInfo, followers, following);
+      const { userInfo, followers, following, meta } = message.data;
+      handleFetchSuccess(userInfo, followers, following, meta);
+    } else if (message.type === 'FETCH_RATE_LIMIT') {
+      showStatus(
+        `Instagram giới hạn request — thử lại sau ${message.retryInSeconds}s ` +
+        `(lần ${message.attempt}/${message.maxAttempts})`
+      );
     } else if (message.type === 'FETCH_ERROR') {
       showError(message.error);
       isFetching = false;
       btnFetch.disabled = false;
+      btnFetch.classList.remove('fetching');
+      const btnLabel = btnFetch.querySelector('.fetch-btn-label');
+      if (btnLabel) btnLabel.textContent = 'Quét dữ liệu';
       hideStatus();
     }
   });
@@ -107,6 +117,9 @@ document.addEventListener('DOMContentLoaded', () => {
     isFetching = true;
     currentUsername = username;
     btnFetch.disabled = true;
+    btnFetch.classList.add('fetching');
+    const btnLabel = btnFetch.querySelector('.fetch-btn-label');
+    if (btnLabel) btnLabel.textContent = 'Đang quét...';
     hideError();
     showStatus('Đang kết nối với Instagram...');
 
@@ -121,6 +134,8 @@ document.addEventListener('DOMContentLoaded', () => {
         showError(response?.error || 'UNKNOWN');
         isFetching = false;
         btnFetch.disabled = false;
+        btnFetch.classList.remove('fetching');
+        if (btnLabel) btnLabel.textContent = 'Quét dữ liệu';
         return;
       }
       
@@ -129,26 +144,36 @@ document.addEventListener('DOMContentLoaded', () => {
       showError(err.message);
       isFetching = false;
       btnFetch.disabled = false;
+      btnFetch.classList.remove('fetching');
+      if (btnLabel) btnLabel.textContent = 'Quét dữ liệu';
     }
   }
 
-
-  async function handleFetchSuccess(userInfo, followers, following) {
+  async function handleFetchSuccess(userInfo, followers, following, meta = null) {
     try {
-      // Save snapshot
+      // Save snapshot with metadata
       showStatus('Đang lưu dữ liệu...');
-      await Storage.saveSnapshot(userInfo.username, followers, following);
+      await Storage.saveSnapshot(userInfo.username, followers, following, userInfo, meta);
 
       // Render everything
       await renderAll(userInfo.username);
 
-      showStatus(`Hoàn tất! ${followers.length} followers, ${following.length} following`);
-      setTimeout(hideStatus, 3000);
+      const isComplete = meta?.isFollowersComplete !== false && meta?.isFollowingComplete !== false;
+      if (isComplete) {
+        showStatus(`Hoàn tất! ${followers.length} followers, ${following.length} following`);
+      } else {
+        const total = userInfo.follower_count || followers.length;
+        showStatus(`Đã lấy ${followers.length}/${total} followers (Instagram tạm dừng). Đã bật chế độ bảo vệ dữ liệu.`);
+      }
+      setTimeout(hideStatus, 4000);
     } catch (e) {
       showError(e.message);
     } finally {
       isFetching = false;
       btnFetch.disabled = false;
+      btnFetch.classList.remove('fetching');
+      const btnLabel = btnFetch.querySelector('.fetch-btn-label');
+      if (btnLabel) btnLabel.textContent = 'Quét dữ liệu';
     }
   }
 
@@ -179,8 +204,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // Changes
     await renderChanges(username);
 
-    // Insights
-    renderInsights(snapshot);
+    // Insights: find last complete snapshot to protect known followers
+    const snapshots = await Storage.getSnapshots(username);
+    let prevComplete = null;
+    if (snapshots.length >= 2) {
+      for (let i = snapshots.length - 2; i >= 0; i--) {
+        const s = snapshots[i];
+        if (s.isFollowersComplete !== false && s.isFollowingComplete !== false) {
+          prevComplete = s;
+          break;
+        }
+      }
+    }
+    renderInsights(snapshot, prevComplete);
 
     // Tracked users chips
     await renderTrackedUsers();
@@ -188,27 +224,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Overview ---
   function renderOverview(snapshot, username) {
+    const expectedFollowers = snapshot.followerCount || snapshot.followers.length;
+    const expectedFollowing = snapshot.followingCount || snapshot.following.length;
+
     document.getElementById('overviewFollowers').textContent =
-      formatNumber(snapshot.followerCount);
+      formatNumber(expectedFollowers);
     document.getElementById('overviewFollowing').textContent =
-      formatNumber(snapshot.followingCount);
+      formatNumber(expectedFollowing);
 
     const ratio =
-      snapshot.followingCount > 0
-        ? (snapshot.followerCount / snapshot.followingCount).toFixed(2)
+      expectedFollowing > 0
+        ? (expectedFollowers / expectedFollowing).toFixed(2)
         : '∞';
     document.getElementById('overviewRatio').textContent = ratio;
 
     document.getElementById('overviewLastSync').textContent =
       getTimeAgo(snapshot.timestamp);
 
-    // Changes from previous snapshot
+    // Changes from previous snapshot (compare with last complete if possible)
     Storage.getSnapshots(username).then((snapshots) => {
       if (snapshots.length >= 2) {
-        const diff = Storage.computeDiff(
-          snapshots[snapshots.length - 2],
-          snapshots[snapshots.length - 1]
-        );
+        let prev = snapshots[snapshots.length - 2];
+        for (let i = snapshots.length - 2; i >= 0; i--) {
+          if (snapshots[i].isFollowersComplete !== false && snapshots[i].isFollowingComplete !== false) {
+            prev = snapshots[i];
+            break;
+          }
+        }
+        const diff = Storage.computeDiff(prev, snapshots[snapshots.length - 1]);
         if (diff) {
           setChangeEl('overviewFollowersChange', diff.followerChange);
           setChangeEl('overviewFollowingChange', diff.followingChange);
@@ -228,20 +271,77 @@ document.addEventListener('DOMContentLoaded', () => {
     el.className = `stat-change ${change > 0 ? 'positive' : 'negative'}`;
   }
 
+  // Dual-key matcher for fast, robust user lookups across lists
+  function createUserMatcher(users) {
+    const ids = new Set();
+    const usernames = new Set();
+    for (const u of users || []) {
+      const id = String(u.id || '').trim();
+      const uname = String(u.username || '').trim().toLowerCase();
+      if (id && id !== 'undefined' && id !== 'null') ids.add(id);
+      if (uname && uname !== 'undefined' && uname !== 'null') usernames.add(uname);
+    }
+    return {
+      has(u) {
+        if (!u) return false;
+        const id = String(u.id || '').trim();
+        if (id && id !== 'undefined' && id !== 'null' && ids.has(id)) return true;
+        const uname = String(u.username || '').trim().toLowerCase();
+        if (uname && uname !== 'undefined' && uname !== 'null' && usernames.has(uname)) return true;
+        return false;
+      },
+    };
+  }
+
   // --- Insights ---
-  function renderInsights(snapshot) {
-    const followerSet = new Set(snapshot.followers.map((f) => f.username));
-    const followingSet = new Set(snapshot.following.map((f) => f.username));
+  function renderInsights(snapshot, previousCompleteSnapshot = null) {
+    const followerMatcher = createUserMatcher(snapshot.followers);
+    const followingMatcher = createUserMatcher(snapshot.following);
+
+    const prevFollowerMatcher = previousCompleteSnapshot
+      ? createUserMatcher(previousCompleteSnapshot.followers)
+      : null;
+
+    const isFollowersIncomplete = snapshot.isFollowersComplete === false ||
+      (snapshot.followerCount > 15 && snapshot.followers.length < snapshot.followerCount * 0.85);
+
+    // Update incomplete warning banner
+    const warningEl = document.getElementById('incompleteWarning');
+    const warningText = document.getElementById('incompleteWarningText');
+    if (warningEl) {
+      if (isFollowersIncomplete) {
+        warningEl.classList.remove('hidden');
+        if (warningText) {
+          warningText.textContent = `Instagram chỉ tải được ${snapshot.followers.length}/${snapshot.followerCount} người theo dõi (bị giới hạn phản hồi). Hệ thống đã bật chế độ bảo vệ để không nhận diện sai bạn bè là đã hủy theo dõi. Hãy thử Quét dữ liệu lại sau ít phút.`;
+        }
+      } else {
+        warningEl.classList.add('hidden');
+      }
+    }
 
     // People you follow but don't follow you back
-    const notFollowingBack = snapshot.following.filter(
-      (f) => !followerSet.has(f.username)
-    );
+    const notFollowingBack = snapshot.following.filter((f) => {
+      // 1. If currently in followers list, they definitely follow back
+      if (followerMatcher.has(f)) return false;
+
+      // 2. If current fetch was incomplete, but this user was a confirmed follower in the last complete scan,
+      // DO NOT falsely accuse them of unfollowing / not following back!
+      if (isFollowersIncomplete && prevFollowerMatcher && prevFollowerMatcher.has(f)) {
+        return false;
+      }
+
+      return true;
+    });
 
     // People who follow you but you don't follow back
     const notFollowedBack = snapshot.followers.filter(
-      (f) => !followingSet.has(f.username)
+      (f) => !followingMatcher.has(f)
     );
+
+    const badgeLost = document.getElementById('notFollowingBackBadge');
+    if (badgeLost) badgeLost.textContent = notFollowingBack.length;
+    const badgeGained = document.getElementById('notFollowedBackBadge');
+    if (badgeGained) badgeGained.textContent = notFollowedBack.length;
 
     renderInsightList(
       document.getElementById('notFollowingBack'),
@@ -257,7 +357,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderInsightList(container, users, emptyMsg) {
     if (users.length === 0) {
-      container.innerHTML = `<div class="empty-state" style="padding:20px">${emptyMsg}</div>`;
+      container.innerHTML = `<div class="empty-state" style="padding:24px">${emptyMsg}</div>`;
       return;
     }
 
@@ -270,7 +370,10 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="user-username">${escapeHtml(u.username)}</div>
           <div class="user-fullname">${escapeHtml(u.full_name || '')}</div>
         </div>
-        <a href="https://instagram.com/${u.username}" target="_blank" class="user-link">Xem</a>
+        <a href="${escapeHtml(profileUrl(u.username))}" target="_blank" class="user-link">
+          <span>Xem</span>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg>
+        </a>
       </div>
     `
       )
@@ -295,7 +398,10 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="user-username">${escapeHtml(u.username)}</div>
           <div class="user-fullname">${escapeHtml(u.full_name || '')}</div>
         </div>
-        <a href="https://instagram.com/${u.username}" target="_blank" class="user-link">Xem</a>
+        <a href="${escapeHtml(profileUrl(u.username))}" target="_blank" class="user-link">
+          <span>Xem</span>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg>
+        </a>
       </div>
     `
       )
@@ -381,8 +487,78 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="user-info">
           <div class="user-username" style="font-size:13px">${escapeHtml(u.username)}</div>
         </div>
-        <a href="https://instagram.com/${u.username}" target="_blank" class="user-link">Xem</a>
+        <a href="${escapeHtml(profileUrl(u.username))}" target="_blank" class="user-link">
+          <span>Xem</span>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg>
+        </a>
       </div>`;
+  }
+
+  // --- Reset Dashboard to empty state ---
+  function resetDashboard() {
+    currentUsername = '';
+    usernameInput.value = '';
+    document.getElementById('overviewFollowers').textContent = '—';
+    document.getElementById('overviewFollowing').textContent = '—';
+    document.getElementById('overviewRatio').textContent = '—';
+    document.getElementById('overviewLastSync').textContent = '—';
+    setChangeEl('overviewFollowersChange', 0);
+    setChangeEl('overviewFollowingChange', 0);
+    document.getElementById('followersCountBadge').textContent = '0';
+    document.getElementById('followingCountBadge').textContent = '0';
+    const badgeLost = document.getElementById('notFollowingBackBadge');
+    if (badgeLost) badgeLost.textContent = '0';
+    const badgeGained = document.getElementById('notFollowedBackBadge');
+    if (badgeGained) badgeGained.textContent = '0';
+    document.getElementById('notFollowingBack').innerHTML =
+      '<div class="empty-state" style="padding:24px">Chưa có dữ liệu</div>';
+    document.getElementById('notFollowedBack').innerHTML =
+      '<div class="empty-state" style="padding:24px">Chưa có dữ liệu</div>';
+    document.getElementById('followersList').innerHTML =
+      '<div class="empty-state">Nhấn Quét dữ liệu để lấy danh sách</div>';
+    document.getElementById('followingList').innerHTML =
+      '<div class="empty-state">Nhấn Quét dữ liệu để lấy danh sách</div>';
+    document.getElementById('changesList').innerHTML =
+      '<div class="empty-state">Cần ít nhất 2 lần quét dữ liệu để so sánh biến động</div>';
+  }
+
+  // --- Confirm Delete Modal ---
+  function confirmDeleteModal(username) {
+    return new Promise((resolve) => {
+      const modalOverlay = document.getElementById('deleteModalOverlay');
+      const modalDesc = document.getElementById('deleteModalDesc');
+      const cancelBtn = document.getElementById('deleteModalCancel');
+      const confirmBtn = document.getElementById('deleteModalConfirm');
+
+      modalDesc.innerHTML = `Bạn có chắc muốn xoá toàn bộ dữ liệu scan của <strong>@${escapeHtml(username)}</strong>? Thao tác này không thể hoàn tác.`;
+
+      modalOverlay.classList.remove('hidden');
+
+      function cleanup(result) {
+        modalOverlay.classList.add('hidden');
+        cancelBtn.removeEventListener('click', onCancel);
+        confirmBtn.removeEventListener('click', onConfirm);
+        modalOverlay.removeEventListener('click', onOverlayClick);
+        document.removeEventListener('keydown', onKeyDown);
+        resolve(result);
+      }
+
+      function onCancel() { cleanup(false); }
+      function onConfirm() { cleanup(true); }
+      function onOverlayClick(e) {
+        if (e.target === modalOverlay) cleanup(false);
+      }
+      function onKeyDown(e) {
+        if (e.key === 'Escape') cleanup(false);
+      }
+
+      cancelBtn.addEventListener('click', onCancel);
+      confirmBtn.addEventListener('click', onConfirm);
+      modalOverlay.addEventListener('click', onOverlayClick);
+      document.addEventListener('keydown', onKeyDown);
+
+      confirmBtn.focus();
+    });
   }
 
   // --- Tracked Users Chips ---
@@ -391,21 +567,50 @@ document.addEventListener('DOMContentLoaded', () => {
     trackedUsersEl.innerHTML = users
       .map(
         (u) => `
-      <button class="tracked-chip ${u === currentUsername.toLowerCase() ? 'active' : ''}"
-              data-user="${escapeHtml(u)}">
-        @${escapeHtml(u)}
-      </button>
+      <div class="tracked-chip ${u === currentUsername.toLowerCase() ? 'active' : ''}"
+           data-user="${escapeHtml(u)}"
+           title="@${escapeHtml(u)}">
+        <span class="chip-name">@${escapeHtml(u)}</span>
+        <button type="button" class="chip-delete" title="Xoá dữ liệu @${escapeHtml(u)}" aria-label="Xoá @${escapeHtml(u)}">✕</button>
+      </div>
     `
       )
       .join('');
 
     trackedUsersEl.querySelectorAll('.tracked-chip').forEach((chip) => {
-      chip.addEventListener('click', async () => {
-        const user = chip.dataset.user;
+      const user = chip.dataset.user;
+
+      // Click on chip selects and loads that user
+      chip.addEventListener('click', async (e) => {
+        if (e.target.closest('.chip-delete')) return;
         usernameInput.value = user;
         currentUsername = user;
         await renderAll(user);
       });
+
+      // Click on delete button removes user data
+      const deleteBtn = chip.querySelector('.chip-delete');
+      if (deleteBtn) {
+        deleteBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const confirmed = await confirmDeleteModal(user);
+          if (!confirmed) return;
+
+          await Storage.deleteUser(user);
+          const remainingUsers = await Storage.getTrackedUsers();
+
+          if (user === currentUsername.toLowerCase()) {
+            if (remainingUsers.length > 0) {
+              currentUsername = remainingUsers[0];
+              usernameInput.value = currentUsername;
+              await renderAll(currentUsername);
+            } else {
+              resetDashboard();
+            }
+          }
+          await renderTrackedUsers();
+        });
+      }
     });
   }
 
@@ -425,10 +630,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Generate gradient avatar with user's initial
   const AVATAR_GRADIENTS = [
-    ['#FF6B6B', '#EE5A24'], ['#A29BFE', '#6C5CE7'], ['#00B894', '#00CEC9'],
-    ['#FDCB6E', '#E17055'], ['#E056A0', '#F78FB3'], ['#6C5CE7', '#A29BFE'],
-    ['#00CEC9', '#81ECEC'], ['#FAB1A0', '#FF7979'], ['#55E6C1', '#58B19F'],
-    ['#3DC1D3', '#6C5CE7'], ['#F8C291', '#E55039'], ['#B8E994', '#78E08F'],
+    ['#833ab4', '#fd1d1d'], ['#6366f1', '#a855f7'], ['#06b6d4', '#3b82f6'],
+    ['#ec4899', '#f43f5e'], ['#10b981', '#059669'], ['#f59e0b', '#d97706'],
+    ['#8b5cf6', '#d946ef'], ['#14b8a6', '#0ea5e9'], ['#f43f5e', '#fb7185'],
+    ['#3b82f6', '#8b5cf6'], ['#e11d48', '#f97316'], ['#10b981', '#3b82f6'],
   ];
 
   function hashCode(str) {
@@ -443,7 +648,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function avatarHtml(user, size = 40) {
     const initial = (user.username || '?')[0].toUpperCase();
     const colors = AVATAR_GRADIENTS[hashCode(user.username) % AVATAR_GRADIENTS.length];
-    const fontSize = Math.round(size * 0.45);
+    const fontSize = Math.round(size * 0.44);
     return `<div class="user-avatar" style="width:${size}px;height:${size}px;min-width:${size}px;background:linear-gradient(135deg,${colors[0]},${colors[1]});display:flex;align-items:center;justify-content:center;font-weight:700;font-size:${fontSize}px;color:#fff;border-radius:50%;">${initial}</div>`;
   }
 
@@ -475,10 +680,21 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  const HTML_ESCAPES = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  };
+
+  // Escapes quotes too — these values land in attributes, not just text
   function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
+    return String(str ?? '').replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]);
+  }
+
+  function profileUrl(username) {
+    return `https://instagram.com/${encodeURIComponent(username || '')}`;
   }
 
   // --- Init ---

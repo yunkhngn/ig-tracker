@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="ig6" x1="12%" y1="95%" x2="88%" y2="5%">
+      <stop offset="0%" stop-color="#FFDC80"/>
+      <stop offset="22%" stop-color="#F77737"/>
+      <stop offset="45%" stop-color="#E1306C"/>
+      <stop offset="75%" stop-color="#833AB4"/>
+      <stop offset="100%" stop-color="#405DE6"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="24" y="24" width="464" height="464" rx="108" ry="108" fill="url(#ig6)"/>
+  <rect x="24" y="24" width="464" height="464" rx="108" ry="108" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>
+
+  <!-- Camera Outer -->
+  <rect x="116" y="116" width="280" height="280" rx="72" ry="72" fill="none" stroke="#FFFFFF" stroke-width="26"/>
+  <!-- Flash Dot -->
+  <circle cx="334" cy="178" r="16" fill="#FFFFFF"/>
+
+  <!-- Lens: Target / Radar Circle -->
+  <circle cx="256" cy="256" r="72" fill="none" stroke="#FFFFFF" stroke-width="22"/>
+
+  <!-- Inside Lens: Minimalist Follower User Glyph in white -->
+  <circle cx="256" cy="236" r="22" fill="#FFFFFF"/>
+  <path d="M 220 286 C 220 264, 236 260, 256 260 C 276 260, 292 264, 292 286 Z" fill="#FFFFFF"/>
+</svg>

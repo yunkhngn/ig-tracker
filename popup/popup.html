@@ -3,41 +3,82 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>IG Tracker</title>
+  <title>Who Unfollowed You</title>
+  <link rel="stylesheet" href="../fonts/inter.css">
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
+  <div class="popup-ambient">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+  </div>
+
   <div class="popup">
+    <!-- Header -->
     <div class="header">
-      <img src="../icons/icon48.png" alt="IG Tracker" class="logo">
-      <h1>IG Tracker</h1>
+      <div class="logo-wrapper">
+        <img src="../icons/icon48.png" alt="Who Unfollowed You" class="logo">
+      </div>
+      <div class="header-info">
+        <div class="title-row">
+          <h1 class="brand-title">Who Unfollowed You</h1>
+          <span class="version-tag">v1.0</span>
+        </div>
+        <span class="subtitle">Analytics & Insights</span>
+      </div>
     </div>
 
+    <!-- Stats -->
     <div class="stats" id="stats">
       <div class="stat-card">
-        <span class="stat-label">Followers</span>
+        <div class="stat-card-header">
+          <span class="stat-label">Followers</span>
+          <div class="stat-icon-wrap followers-grad">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+          </div>
+        </div>
         <span class="stat-value" id="followerCount">—</span>
       </div>
+
       <div class="stat-card">
-        <span class="stat-label">Following</span>
+        <div class="stat-card-header">
+          <span class="stat-label">Following</span>
+          <div class="stat-icon-wrap following-grad">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+              <circle cx="8.5" cy="7" r="4"/>
+              <polyline points="17 11 19 13 23 9"/>
+            </svg>
+          </div>
+        </div>
         <span class="stat-value" id="followingCount">—</span>
       </div>
     </div>
 
+    <!-- Last Sync -->
     <div class="last-sync" id="lastSync">
-      <span>Chưa đồng bộ</span>
+      <span class="sync-dot"></span>
+      <span class="sync-text">Chưa đồng bộ dữ liệu</span>
     </div>
 
+    <!-- Action Button -->
     <button class="btn-primary" id="openDashboard">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="3" y="3" width="18" height="18" rx="2"/>
-        <path d="M3 9h18M9 21V9"/>
+      <span class="btn-text">Mở Dashboard</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+        <polyline points="15 3 21 3 21 9"/>
+        <line x1="10" y1="14" x2="21" y2="3"/>
       </svg>
-      Mở Dashboard
     </button>
 
+    <!-- Footer -->
     <div class="footer">
-      <span>v1.0.0 @yun.khngn</span>
+      <span>Built with ❤️ by @yun.khngn</span>
     </div>
   </div>
 

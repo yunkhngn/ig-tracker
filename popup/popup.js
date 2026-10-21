@@ -36,8 +36,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         formatNumber(mostRecent.followingCount);
 
       const timeAgo = getTimeAgo(mostRecent.timestamp);
-      document.getElementById('lastSync').innerHTML =
-        `<span>@${mostRecent.username} • Đồng bộ ${timeAgo}</span>`;
+      const dot = document.createElement('span');
+      dot.className = 'sync-dot';
+      const text = document.createElement('span');
+      text.className = 'sync-text';
+      text.innerHTML = `<strong>@${escapeHtml(mostRecent.username)}</strong> • Đồng bộ ${timeAgo}`;
+      document.getElementById('lastSync').replaceChildren(dot, text);
     }
   } catch (err) {
     console.error('Failed to load stats:', err);
@@ -61,3 +65,9 @@ function getTimeAgo(timestamp) {
   if (hours < 24) return `${hours} giờ trước`;
   return `${days} ngày trước`;
 }
+
+function escapeHtml(str) {
+  const escapes = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+  return String(str ?? '').replace(/[&<>"']/g, (c) => escapes[c]);
+}
+

@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Who Unfollowed You for Instagram™ — 100% Private Follower Tracker</title>
+  <meta name="description" content="Secure, fast, and 100% local extension to track unfollowers, mutual friends, and non-followers on Instagram. No password required, zero external servers.">
+  <meta property="og:title" content="Who Unfollowed You for Instagram™">
+  <meta property="og:description" content="Private and local follower analytics extension for Instagram. Keep your credentials safe.">
+  <meta property="og:type" content="website">
+  <link rel="icon" type="image/png" href="icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="bg-glow-top"></div>
+  <div class="bg-glow-bottom"></div>
+
+  <!-- Navigation -->
+  <header class="site-header">
+    <div class="container nav-container">
+      <a href="index.html" class="brand">
+        <img src="icon.png" alt="Who Unfollowed You Icon" class="brand-icon">
+        <span>Who Unfollowed You</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#features" class="nav-link">Features</a></li>
+        <li><a href="#how-it-works" class="nav-link">How It Works</a></li>
+        <li><a href="#faq" class="nav-link">FAQ</a></li>
+        <li><a href="privacy.html" class="nav-link">Privacy</a></li>
+        <li>
+          <a href="https://github.com/yunkhngn/ig-tracker" target="_blank" rel="noopener noreferrer" class="btn-nav">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+            </svg>
+            <span>GitHub</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="container">
+      <div class="pill-badge">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        <span>100% Local Storage • Zero Password Needed • Open-Source</span>
+      </div>
+
+      <h1 class="hero-title">
+        Know Exactly <span class="gradient-text">Who Unfollowed You</span> on Instagram™
+      </h1>
+
+      <p class="hero-desc">
+        A fast, privacy-first browser extension designed to identify unfollowers, users who don't follow back, and mutual connections without ever exposing your account.
+      </p>
+
+      <div class="hero-actions">
+        <a href="https://github.com/yunkhngn/ig-tracker/releases" target="_blank" rel="noopener noreferrer" class="btn-primary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 8 12 12 14 14"/>
+            <path d="M12 2a10 10 0 0 1 10 10"/>
+            <path d="M8 12l4 4 4-4"/>
+          </svg>
+          <span>Install Extension</span>
+        </a>
+        <a href="privacy.html" class="btn-secondary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <polyline points="10 9 9 9 8 9"/>
+          </svg>
+          <span>Read Privacy Policy</span>
+        </a>
+      </div>
+
+      <!-- Hero Dashboard Preview Mockup -->
+      <div class="hero-preview">
+        <div class="preview-topbar">
+          <div class="preview-dots">
+            <span class="dot red"></span>
+            <span class="dot yellow"></span>
+            <span class="dot green"></span>
+          </div>
+          <span class="preview-tag">dashboard.html &mdash; Who Unfollowed You</span>
+          <div style="width: 48px;"></div>
+        </div>
+
+        <div class="preview-stats-grid">
+          <div class="preview-stat-card">
+            <div class="preview-stat-label">Followers</div>
+            <div class="preview-stat-val">
+              <span>1,420</span>
+              <span class="stat-badge-tag success">+12</span>
+            </div>
+          </div>
+          <div class="preview-stat-card">
+            <div class="preview-stat-label">Following</div>
+            <div class="preview-stat-val">
+              <span>584</span>
+              <span class="stat-badge-tag">0</span>
+            </div>
+          </div>
+          <div class="preview-stat-card">
+            <div class="preview-stat-label">Not Following Back</div>
+            <div class="preview-stat-val">
+              <span>42</span>
+              <span class="stat-badge-tag danger">Alert</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="preview-list-section">
+          <div class="preview-list-header">
+            <span>Recent Unfollowers (Last 24 Hours)</span>
+            <span>Status</span>
+          </div>
+          <div class="preview-user-row">
+            <div class="user-meta">
+              <div class="mock-avatar" style="background: linear-gradient(135deg, #ec4899, #f43f5e);">A</div>
+              <div class="user-name-wrap">
+                <div class="name">alex_design</div>
+                <div class="sub">Alex Rivera</div>
+              </div>
+            </div>
+            <span class="action-chip">Unfollowed you</span>
+          </div>
+          <div class="preview-user-row">
+            <div class="user-meta">
+              <div class="mock-avatar" style="background: linear-gradient(135deg, #8b5cf6, #d946ef);">S</div>
+              <div class="user-name-wrap">
+                <div class="name">sam_studio</div>
+                <div class="sub">Sam K.</div>
+              </div>
+            </div>
+            <span class="action-chip">Unfollowed you</span>
+          </div>
+          <div class="preview-user-row">
+            <div class="user-meta">
+              <div class="mock-avatar" style="background: linear-gradient(135deg, #06b6d4, #3b82f6);">M</div>
+              <div class="user-name-wrap">
+                <div class="name">michael_photos</div>
+                <div class="sub">Michael B.</div>
+              </div>
+            </div>
+            <span class="action-chip">Not following back</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Section -->
+  <section class="features-section" id="features">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-subtitle">Engineered for Security</div>
+        <h2 class="section-title">Built Different from Third-Party Apps</h2>
+        <p class="section-desc">
+          Most follower apps ask for your Instagram password, send your data to obscure servers, and get your account suspended. Who Unfollowed You operates entirely inside your own browser.
+        </p>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon-wrap">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+          </div>
+          <h3 class="feature-title">No Password Required</h3>
+          <p class="feature-desc">
+            The extension uses your active, logged-in browser session cookies directly. Your password is never asked, stored, or processed.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon-wrap cyan">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+              <line x1="12" y1="22.08" x2="12" y2="12"/>
+            </svg>
+          </div>
+          <h3 class="feature-title">100% Local Storage</h3>
+          <p class="feature-desc">
+            All snapshot comparisons and history are saved strictly in your device's local browser storage. Zero tracking pixels, zero analytics.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon-wrap emerald">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              <polyline points="9 12 11 14 15 10"/>
+            </svg>
+          </div>
+          <h3 class="feature-title">Dual-Key Identity Matching</h3>
+          <p class="feature-desc">
+            Matches accounts by both permanent numeric ID and username. If a follower changes their username handle, they will never be falsely flagged as an unfollower.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon-wrap">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+              <polyline points="17 6 23 6 23 12"/>
+            </svg>
+          </div>
+          <h3 class="feature-title">Incomplete Fetch Protection</h3>
+          <p class="feature-desc">
+            If Instagram throttles a scan mid-pagination, the algorithm suppresses false unfollow accusations for unfetched users and protects your history.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon-wrap cyan">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+          </div>
+          <h3 class="feature-title">Deep Relationship Insights</h3>
+          <p class="feature-desc">
+            Filter instantly between people who don't follow you back, followers you haven't followed back (fans), and mutual connections with clean search.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon-wrap emerald">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          </div>
+          <h3 class="feature-title">Data Export & Cleanup</h3>
+          <p class="feature-desc">
+            Export all historical snapshots as structured JSON anytime, or delete any tracked username data permanently with a single click.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works Section -->
+  <section class="steps-section" id="how-it-works">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-subtitle">Simple Setup</div>
+        <h2 class="section-title">Ready in Less than 60 Seconds</h2>
+        <p class="section-desc">
+          No external accounts to create, no verification codes to input, and no complicated setup.
+        </p>
+      </div>
+
+      <div class="steps-grid">
+        <div class="step-card">
+          <span class="step-num">Step 01</span>
+          <h3 class="step-title">Install the Extension</h3>
+          <p class="step-desc">
+            Add the extension to Chrome, Brave, Edge, or any Chromium-compatible browser. Pin the magnifying glass icon to your toolbar.
+          </p>
+        </div>
+
+        <div class="step-card">
+          <span class="step-num">Step 02</span>
+          <h3 class="step-title">Open Instagram</h3>
+          <p class="step-desc">
+            Log in to your regular Instagram account on instagram.com in any browser tab. The extension securely accesses the active web session.
+          </p>
+        </div>
+
+        <div class="step-card">
+          <span class="step-num">Step 03</span>
+          <h3 class="step-title">Run Scan & View Results</h3>
+          <p class="step-desc">
+            Click "Scan Data". In seconds, your dashboard compares your current list with previous snapshots to pinpoint every unfollower.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ Section -->
+  <section class="faq-section" id="faq">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-subtitle">Common Questions</div>
+        <h2 class="section-title">Frequently Asked Questions</h2>
+      </div>
+
+      <div class="faq-list">
+        <div class="faq-item">
+          <div class="faq-question">
+            <span>Can this extension get my Instagram account banned?</span>
+            <svg class="faq-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </div>
+          <div class="faq-answer">
+            No. Unlike mobile apps that log into your account from strange server IP addresses, this extension runs directly inside your own browser using your existing browser session and standard Instagram web endpoints, with built-in rate-limiting delays and backoff timers.
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <div class="faq-question">
+            <span>Does the extension require my password?</span>
+            <svg class="faq-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </div>
+          <div class="faq-answer">
+            Never. The extension does not have password fields, never prompts for login credentials, and cannot read your passwords. It relies solely on your authenticated browser cookies on instagram.com.
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <div class="faq-question">
+            <span>Where is my follower data stored?</span>
+            <svg class="faq-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </div>
+          <div class="faq-answer">
+            All data is stored exclusively on your local device using Chrome's built-in chrome.storage.local API. Nothing is transmitted to external servers, cloud databases, or third-party analytics services.
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <div class="faq-question">
+            <span>How does it detect unfollowers if this is my first scan?</span>
+            <svg class="faq-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </div>
+          <div class="faq-answer">
+            On your first scan, the extension saves an initial snapshot of all your followers and following. From your second scan onward, it computes the exact diff between snapshots to identify who unfollowed you, who followed you, and who doesn't follow back.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-top">
+        <div class="brand">
+          <img src="icon.png" alt="Who Unfollowed You Icon" class="brand-icon">
+          <span>Who Unfollowed You for Instagram™</span>
+        </div>
+        <ul class="footer-links">
+          <li><a href="index.html" class="footer-link">Home</a></li>
+          <li><a href="privacy.html" class="footer-link">Privacy Policy</a></li>
+          <li><a href="terms.html" class="footer-link">Terms of Service</a></li>
+          <li><a href="https://github.com/yunkhngn/ig-tracker" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub</a></li>
+        </ul>
+      </div>
+
+      <div class="disclaimer-box">
+        Disclaimer: Who Unfollowed You for Instagram™ is an independent software tool and is not affiliated with, endorsed, sponsored, or certified by Instagram, Meta Platforms, Inc., or any of their affiliates. "Instagram" and the Instagram logo are registered trademarks of Meta Platforms, Inc.
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // FAQ Accordion interaction
+    document.querySelectorAll('.faq-item').forEach((item) => {
+      item.addEventListener('click', () => {
+        const isActive = item.classList.contains('active');
+        document.querySelectorAll('.faq-item').forEach((other) => other.classList.remove('active'));
+        if (!isActive) item.classList.add('active');
+      });
+    });
+  </script>
+</body>
+</html>

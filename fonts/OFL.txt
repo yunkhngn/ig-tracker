@@ -1,0 +1,8 @@
+Inter is licensed under the SIL Open Font License, Version 1.1.
+Copyright (c) 2016-2020 The Inter Project Authors (https://github.com/rsms/inter)
+
+The woff2 files in this directory are the latin, latin-ext and vietnamese
+subsets served by Google Fonts (Inter v20), vendored here so the extension
+makes no external network requests.
+
+Full license text: https://openfontlicense.org/

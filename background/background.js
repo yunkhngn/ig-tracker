@@ -3,28 +3,34 @@
  * Finds Instagram tab and forwards messages to content script
  */
 
-// Find an open Instagram tab
-async function getInstagramTab() {
+// All open Instagram tabs, with tabs the user isn't looking at first —
+// we never want to reload the page someone is actively using.
+async function getInstagramTabs() {
   const tabs = await chrome.tabs.query({ url: 'https://*.instagram.com/*' });
-  if (tabs.length > 0) return tabs[0];
+  return tabs.sort((a, b) => Number(a.active) - Number(b.active));
+}
 
-  // Open one if none exists
+// Open a background Instagram tab and wait for it to finish loading
+async function openInstagramTab() {
   const tab = await chrome.tabs.create({
     url: 'https://www.instagram.com/',
     active: false,
   });
-  // Wait for it to load
-  await new Promise((resolve) => {
-    const onUpdate = (tabId, info) => {
-      if (tabId === tab.id && info.status === 'complete') {
+  await waitForLoad(tab.id);
+  await new Promise((r) => setTimeout(r, 3000));
+  return tab;
+}
+
+function waitForLoad(tabId) {
+  return new Promise((resolve) => {
+    const onUpdate = (id, info) => {
+      if (id === tabId && info.status === 'complete') {
         chrome.tabs.onUpdated.removeListener(onUpdate);
         resolve();
       }
     };
     chrome.tabs.onUpdated.addListener(onUpdate);
   });
-  await new Promise((r) => setTimeout(r, 3000));
-  return tab;
 }
 
 // Check if content script is alive on a tab
@@ -37,27 +43,36 @@ async function pingContentScript(tabId) {
   }
 }
 
-// Forward a message to the content script on an Instagram tab
-async function forwardToContentScript(message) {
-  const tab = await getInstagramTab();
+// Find a tab with a live content script, creating or reloading one if needed.
+// Reloading is only ever done to a background tab.
+async function getReadyTab() {
+  const tabs = await getInstagramTabs();
 
-  // Check if content script is alive
-  let alive = await pingContentScript(tab.id);
-
-  if (!alive) {
-    // Reload the tab and wait for content script
-    await chrome.tabs.reload(tab.id);
-    await new Promise((r) => setTimeout(r, 4000));
-    alive = await pingContentScript(tab.id);
-
-    if (!alive) {
-      return { success: false, error: 'CONTENT_SCRIPT_NOT_LOADED' };
-    }
+  for (const tab of tabs) {
+    if (await pingContentScript(tab.id)) return tab;
   }
 
-  // Forward the message
-  const response = await chrome.tabs.sendMessage(tab.id, message);
-  return response;
+  // Nothing responded. Revive a background tab if we have one...
+  const background = tabs.find((t) => !t.active);
+  if (background) {
+    await chrome.tabs.reload(background.id);
+    await new Promise((r) => setTimeout(r, 4000));
+    if (await pingContentScript(background.id)) return background;
+  }
+
+  // ...otherwise open our own rather than disturbing the active tab.
+  const fresh = await openInstagramTab();
+  if (await pingContentScript(fresh.id)) return fresh;
+
+  return null;
+}
+
+// Forward a message to the content script on an Instagram tab
+async function forwardToContentScript(message) {
+  const tab = await getReadyTab();
+  if (!tab) return { success: false, error: 'CONTENT_SCRIPT_NOT_LOADED' };
+
+  return chrome.tabs.sendMessage(tab.id, message);
 }
 
 // Handle messages from dashboard/popup
@@ -72,4 +87,4 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return false;
 });
 
-console.log('[IG Tracker] Background worker loaded v5');
+console.log('[IG Tracker] Background worker loaded v6');

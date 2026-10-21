@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy &mdash; Who Unfollowed You for Instagram™</title>
+  <meta name="description" content="Official Privacy Policy for Who Unfollowed You for Instagram™. Learn how your data is kept 100% private and stored locally.">
+  <link rel="icon" type="image/png" href="icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="bg-glow-top"></div>
+  <div class="bg-glow-bottom"></div>
+
+  <!-- Header -->
+  <header class="site-header">
+    <div class="container nav-container">
+      <a href="index.html" class="brand">
+        <img src="icon.png" alt="Who Unfollowed You Icon" class="brand-icon">
+        <span>Who Unfollowed You</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="index.html#features" class="nav-link">Features</a></li>
+        <li><a href="index.html#how-it-works" class="nav-link">How It Works</a></li>
+        <li><a href="index.html#faq" class="nav-link">FAQ</a></li>
+        <li><a href="privacy.html" class="nav-link" style="color: var(--primary);">Privacy</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <main class="policy-page">
+    <div class="container">
+      <article class="policy-card">
+        <div class="policy-header">
+          <div class="pill-badge" style="margin-bottom: 16px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            <span>Chrome Web Store Compliant</span>
+          </div>
+          <h1 class="policy-title">Privacy Policy</h1>
+          <div class="policy-meta">Last updated: October 22, 2026</div>
+        </div>
+
+        <section class="policy-section">
+          <h2>1. Overview</h2>
+          <p>
+            <strong>Who Unfollowed You for Instagram™</strong> (&ldquo;we&rdquo;, &ldquo;our&rdquo;, or &ldquo;the extension&rdquo;) is an independent browser extension developed to provide user-controlled follower analytics. We believe that privacy is a fundamental right. This Privacy Policy details our strict commitment to zero remote data harvesting and 100% local operation.
+          </p>
+        </section>
+
+        <section class="policy-section">
+          <h2>2. Data Collection and Transmission</h2>
+          <p>
+            The extension is engineered with an offline-first architecture:
+          </p>
+          <ul>
+            <li><strong>Zero Remote Servers:</strong> We do not operate external web servers, cloud databases, or remote endpoints for this extension. No data ever leaves your personal web browser.</li>
+            <li><strong>No Personal Data Collection:</strong> We do not collect, transmit, rent, or sell your account credentials, browsing history, IP address, user IDs, or relationship lists to any third party.</li>
+            <li><strong>No Analytics or Trackers:</strong> The extension contains zero tracking pixels, telemetry SDKs, Google Analytics, or third-party advertising scripts. All assets and fonts are bundled locally within the installation package.</li>
+          </ul>
+        </section>
+
+        <section class="policy-section">
+          <h2>3. How Data is Handled and Stored</h2>
+          <p>
+            All operations are executed within your local browser context:
+          </p>
+          <ul>
+            <li><strong>Local Browser Storage:</strong> Follower snapshots, relationship diffs, and scan timestamps are stored exclusively on your device using Chrome&rsquo;s built-in <code>chrome.storage.local</code> API.</li>
+            <li><strong>Authentication Safety:</strong> The extension does not collect, prompt for, or store your Instagram password. It accesses public and user-permitted relationship data through your existing, active session cookies on <code>instagram.com</code>.</li>
+            <li><strong>User Control &amp; Deletion:</strong> You have full control over your stored data. You can delete tracked user data at any time via the Dashboard (&ldquo;Delete Data&rdquo; button), or completely erase all stored data by uninstalling the extension from your browser.</li>
+          </ul>
+        </section>
+
+        <section class="policy-section">
+          <h2>4. Permissions Explanation</h2>
+          <p>
+            In accordance with the Chrome Web Store Minimum Permissions Policy, the extension requests only permissions necessary for its core functionality:
+          </p>
+          <ul>
+            <li><strong><code>storage</code> &amp; <code>unlimitedStorage</code>:</strong> Required to persist snapshot histories locally on your computer so you can compare changes between scans over time.</li>
+            <li><strong><code>tabs</code>:</strong> Required to detect when an active <code>instagram.com</code> tab is open, facilitating secure client-side communication.</li>
+            <li><strong>Host Permissions (<code>https://*.instagram.com/*</code>):</strong> Required to fetch your follower and following lists using standard web requests within your authenticated browser session.</li>
+          </ul>
+        </section>
+
+        <section class="policy-section">
+          <h2>5. Third-Party Disclaimer</h2>
+          <p>
+            This extension is an independent tool and is not affiliated with, authorized, maintained, sponsored, or endorsed by Instagram, Meta Platforms, Inc., or any of their affiliates or subsidiaries.
+          </p>
+          <p>
+            &ldquo;Instagram&rdquo; and the Instagram camera logo are registered trademarks of Meta Platforms, Inc.
+          </p>
+        </section>
+
+        <section class="policy-section">
+          <h2>6. Changes to this Privacy Policy</h2>
+          <p>
+            We may update this Privacy Policy from time to time to reflect product enhancements or regulatory requirements. Any modifications will be posted directly to this page with an updated revision date.
+          </p>
+        </section>
+
+        <section class="policy-section">
+          <h2>7. Contact and Inquiries</h2>
+          <p>
+            If you have questions, feedback, or inquiries regarding this Privacy Policy, please open an issue in the official project repository:
+          </p>
+          <p>
+            <a href="https://github.com/yunkhngn/ig-tracker" target="_blank" rel="noopener noreferrer" class="nav-link" style="color: var(--primary); text-decoration: underline;">
+              https://github.com/yunkhngn/ig-tracker
+            </a>
+          </p>
+        </section>
+      </article>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-top">
+        <div class="brand">
+          <img src="icon.png" alt="Who Unfollowed You Icon" class="brand-icon">
+          <span>Who Unfollowed You for Instagram™</span>
+        </div>
+        <ul class="footer-links">
+          <li><a href="index.html" class="footer-link">Home</a></li>
+          <li><a href="privacy.html" class="footer-link">Privacy Policy</a></li>
+          <li><a href="terms.html" class="footer-link">Terms of Service</a></li>
+          <li><a href="https://github.com/yunkhngn/ig-tracker" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub</a></li>
+        </ul>
+      </div>
+
+      <div class="disclaimer-box">
+        Disclaimer: Who Unfollowed You for Instagram™ is an independent software tool and is not affiliated with, endorsed, sponsored, or certified by Instagram, Meta Platforms, Inc., or any of their affiliates.
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
