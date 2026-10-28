@@ -302,6 +302,41 @@ const check = (name, cond, extra = '') => {
   check('preserves isFollowersComplete false flag', snap.isFollowersComplete === false);
 }
 
+// 14. importAll round-trips an export and merges without duplicating
+{
+  const src = loadStorage(makeChrome());
+  await src.saveSnapshot('frank', users(3, 'f'), users(2, 'g'));
+  const exported = await src.exportAll();
+
+  const chrome = makeChrome();
+  const S = loadStorage(chrome);
+  const imported = await S.importAll(exported);
+  check('import returns usernames', imported.length === 1 && imported[0] === 'frank', JSON.stringify(imported));
+  check('imported snapshot readable', (await S.getSnapshots('frank'))[0]?.followers.length === 3);
+  check('imported lastSync set', (await S.getLastSync('frank'))?.followerCount === 3);
+
+  await S.importAll(exported);
+  check('re-import does not duplicate', (await S.getSnapshots('frank')).length === 1);
+
+  await new Promise((r) => setTimeout(r, 2));
+  await S.saveSnapshot('frank', users(4, 'f'), []);
+  await S.importAll(exported);
+  const merged = await S.getSnapshots('frank');
+  check('import keeps newer local snapshot, sorted', merged.length === 2 && merged[1].followers.length === 4);
+}
+
+// 15. importAll rejects bad input without touching storage
+{
+  const chrome = makeChrome();
+  const S = loadStorage(chrome);
+  const errs = [];
+  for (const bad of ['not json', '[]', '{"foo":1}', '{"snapshots_x":[{"timestamp":"no"}]}']) {
+    try { await S.importAll(bad); errs.push('none'); } catch (e) { errs.push(e.message); }
+  }
+  check('bad files throw IMPORT_INVALID', errs.every((e) => e === 'IMPORT_INVALID'), errs.join(','));
+  check('nothing written on bad import', Object.keys(chrome._store).length === 0);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
 

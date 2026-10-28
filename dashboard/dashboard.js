@@ -46,6 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
       CONTENT_SCRIPT_NOT_LOADED: 'Không kết nối được với Instagram. Hãy mở instagram.com và thử lại.',
       CHECKPOINT_REQUIRED: 'Instagram yêu cầu xác minh tài khoản (Checkpoint). Hãy mở instagram.com để xác minh.',
       FETCH_INCOMPLETE: 'Dữ liệu lấy về không đầy đủ do Instagram giới hạn. Hãy thử lại sau vài phút.',
+      IMPORT_INVALID: 'File không hợp lệ. Hãy chọn file JSON được xuất từ IG Tracker.',
     };
     errorText.textContent = messages[msg] || `Lỗi: ${msg}`;
     errorBar.classList.remove('hidden');
@@ -79,7 +80,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const p = message.progress;
       const pct = p.total > 0 ? Math.round((p.fetched / p.total) * 100) : 0;
       const label = p.type === 'followers' ? 'followers' : 'following';
-      showStatus(`Đang lấy ${label}: ${p.fetched}/${p.total} (${pct}%)`);
+      if (p.phase === 'verify') {
+        showStatus(`Đang xác minh ${label} bị thiếu so với lần trước: ${p.fetched}/${p.total}`);
+      } else {
+        showStatus(`Đang lấy ${label}: ${p.fetched}/${p.total} (${pct}%)`);
+      }
       updateProgress(p.fetched, p.total);
     } else if (message.type === 'FETCH_SUCCESS') {
       const { userInfo, followers, following, meta } = message.data;
@@ -124,10 +129,16 @@ document.addEventListener('DOMContentLoaded', () => {
     showStatus('Đang kết nối với Instagram...');
 
     try {
+      // Send the last scan along so anyone missing from the new one can be
+      // checked individually instead of being reported as an unfollow.
+      const prev = await Storage.getLatestCompleteSnapshot(username);
+      const pick = (users) => (users || []).map((u) => ({ id: u.id, username: u.username, full_name: u.full_name || '' }));
+
       // Trigger the fetch
       const response = await chrome.runtime.sendMessage({
         type: 'FETCH_DATA',
         username,
+        previous: prev ? { followers: pick(prev.followers), following: pick(prev.following) } : null,
       });
 
       if (!response || !response.success) {
@@ -624,6 +635,33 @@ document.addEventListener('DOMContentLoaded', () => {
     a.download = `ig-tracker-export-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
+  });
+
+  // --- Import ---
+  const btnImport = document.getElementById('btnImport');
+  const importFile = document.getElementById('importFile');
+
+  btnImport.addEventListener('click', () => {
+    if (isFetching) return;
+    importFile.click();
+  });
+
+  importFile.addEventListener('change', async () => {
+    const file = importFile.files?.[0];
+    importFile.value = ''; // allow picking the same file again
+    if (!file) return;
+
+    hideError();
+    try {
+      const imported = await Storage.importAll(await file.text());
+      const target = imported.includes(currentUsername.toLowerCase()) ? currentUsername : imported[0];
+      usernameInput.value = target;
+      await renderAll(target);
+      showStatus(`Đã nhập dữ liệu của ${imported.length} tài khoản`);
+      setTimeout(hideStatus, 4000);
+    } catch (e) {
+      showError(e.message);
+    }
   });
 
   // --- Utilities ---

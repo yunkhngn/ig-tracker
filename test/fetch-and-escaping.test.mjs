@@ -151,6 +151,68 @@ list = await stub.fetchList('1', 'followers', 3);
 check('all users with missing pk preserved without collision', list.length === 3, `got ${list.length}`);
 check('no user has id "undefined"', !list.some(u => u.id === 'undefined'));
 
+// short first walk triggers a second pass with a new rank_token, merged
+calls = [];
+stub._responder = (u, n) => n === 1
+  ? { users: Array.from({ length: 50 }, (_, i) => ({ pk: i, username: `a${i}` })) }
+  : { users: Array.from({ length: 100 }, (_, i) => ({ pk: i, username: `a${i}` })) };
+list = await stub.fetchList('1', 'followers', 100, true);
+const tok = (c) => c?.match(/rank_token=([^&]+)/)?.[1];
+check('short scan re-walks the list', calls.length === 2 && list.length === 100, `${calls.length} calls, ${list.length} users`);
+check('second pass uses a fresh rank_token', tok(calls[0]) !== tok(calls[1]));
+check('merged result is complete', list.isComplete === true);
+
+// other people's lists: no second walk
+calls = [];
+list = await stub.fetchList('1', 'followers', 100, false);
+check('no re-walk for other accounts', calls.length === 1, `${calls.length} calls`);
+
+// ---- reconcileWithPrevious: missing users are checked, not assumed gone ----
+vm.runInContext('globalThis.reconcileWithPrevious=reconcileWithPrevious;', stub);
+stub.isAuthOrRateLimitError = (e) => ['NOT_LOGGED_IN', 'RATE_LIMITED', 'CHECKPOINT_REQUIRED'].includes(e?.message);
+
+calls = [];
+stub._responder = (u) => {
+  // "skipped" is still following; "gone" really unfollowed
+  if (u.includes('query=skipped')) return { users: [{ pk: 2, username: 'skipped' }, { pk: 77, username: 'skipped_fan' }] };
+  return { users: [{ pk: 88, username: 'gone_lookalike' }] };
+};
+list = [{ id: '1', username: 'kept', full_name: '' }];
+list.expectedCount = 2;
+let stats = await stub.reconcileWithPrevious('9', 'followers', list, [
+  { id: '1', username: 'kept' }, { id: '2', username: 'skipped' }, { id: '3', username: 'gone' },
+]);
+const names = list.map((u) => u.username).sort().join(',');
+check('skipped account is put back, real unfollow is not', names === 'kept,skipped', names);
+check('only missing accounts are looked up', calls.length === 2 && calls.every((c) => c.includes('query=')), calls.join(' | '));
+check('verify stats', stats.restored === 1 && stats.removed === 1 && stats.unverified === 0, JSON.stringify(stats));
+
+// renamed account (same id) is found by id
+calls = [];
+stub._responder = () => ({ users: [{ pk: 5, username: 'new_name' }] });
+list = [];
+stats = await stub.reconcileWithPrevious('9', 'following', list, [{ id: '5', username: 'old_name' }]);
+check('renamed account matched by id, stored with new name', list.length === 1 && list[0].username === 'new_name', JSON.stringify(list));
+
+// a failed lookup keeps the account instead of reporting an unfollow
+calls = [];
+stub._responder = () => { throw new Error('NOT_LOGGED_IN'); };
+list = [];
+stats = await stub.reconcileWithPrevious('9', 'followers', list, [{ id: '1', username: 'a' }, { id: '2', username: 'b' }]);
+check('failed lookup carries account over', list.length === 2 && stats.unverified === 2, JSON.stringify(stats));
+check('auth failure stops further lookups', calls.length === 1, `${calls.length} calls`);
+
+// a truncated scan is not checked one by one: everyone kept, still incomplete
+calls = [];
+list = [{ id: '1', username: 'a' }];
+list.isComplete = false;
+list.expectedCount = 500;
+stats = await stub.reconcileWithPrevious('9', 'followers', list,
+  Array.from({ length: 300 }, (_, i) => ({ id: String(i + 2), username: `p${i}` })));
+check('truncated scan makes no lookups', calls.length === 0, `${calls.length} calls`);
+check('truncated scan keeps everyone, stays incomplete', list.length === 301 && list.isComplete === false,
+      `${list.length} ${list.isComplete}`);
+
 // ---- getAppId & getUserInfo tests ----
 console.log('\ngetAppId & getUserInfo (from content.js):');
 const userSrc = slice(content, '  // Extract the real x-ig-app-id', '  // Sleep helper');

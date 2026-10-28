@@ -89,7 +89,9 @@
     const data = await res.json();
     if (data?.status === 'fail') {
       const msg = String(data.message || '').toLowerCase();
-      if (msg.includes('rate') || msg.includes('wait') || msg.includes('feedback')) {
+      console.warn(`[IG Tracker] API fail for ${url}:`, data.message, data.feedback_title || '');
+      // Match whole phrases — a bare "rate" also matches "generate", "accurate"…
+      if (/please wait|rate.?limit|try again later|few minutes|feedback_required/.test(msg) || data.spam) {
         throw new Error('RATE_LIMITED');
       }
       if (msg.includes('checkpoint')) {
@@ -316,14 +318,49 @@
   // Paginated fetch of followers or following
   const MAX_PAGES = 2000; // 50 per page — a hard stop so a repeating cursor can't spin forever
 
-  async function fetchList(userId, type, total) {
+  function isListComplete(count, expectedTotal) {
+    if (expectedTotal <= 15) return true;
+    const allowedDiscrepancy = Math.max(5, Math.round(expectedTotal * 0.1));
+    return count >= expectedTotal - allowedDiscrepancy;
+  }
+
+  // Instagram's follow lists are not stable: one walk through the pages can
+  // silently skip accounts that are still there. If the first walk comes up
+  // short, walk again with a fresh rank_token and merge what we find.
+  const EXTRA_PASSES = 1;
+
+  // Someone else's lists are throttled much harder than your own, and Instagram
+  // often won't serve them in full anyway — so go slower and don't re-walk.
+  async function fetchList(userId, type, total, isSelf = null) {
     const list = [];
     const seenUserKeys = new Set();
+    const expectedTotal = total || 0;
+    const careful = isSelf === false;
+    const extraPasses = careful ? 0 : EXTRA_PASSES;
+
+    for (let pass = 0; pass <= extraPasses; pass++) {
+      const before = list.length;
+      await fetchPass(userId, type, total, list, seenUserKeys, careful);
+      if (list.length >= expectedTotal || list.length === before) break;
+      if (pass === 0 && isListComplete(list.length, expectedTotal)) break;
+      console.warn(`[IG Tracker] ${type}: ${list.length}/${expectedTotal} after pass ${pass + 1}, re-scanning`);
+    }
+
+    if (total && total > 5 && list.length === 0) {
+      throw new Error('FETCH_INCOMPLETE');
+    }
+
+    list.isComplete = isListComplete(list.length, expectedTotal);
+    list.fetchedCount = list.length;
+    list.expectedCount = expectedTotal;
+
+    return list;
+  }
+
+  async function fetchPass(userId, type, total, list, seenUserKeys, careful = false) {
     const seenCursors = new Set();
     const rankToken = generateUuid();
     let maxId = null;
-    let consecutiveRetries = 0;
-    const MAX_RETRIES = 2;
 
     for (let page = 0; page < MAX_PAGES; page++) {
       let url = `/api/v1/friendships/${userId}/${type}/?count=50&rank_token=${rankToken}&search_surface=follow_list_page`;
@@ -364,23 +401,103 @@
       seenCursors.add(nextCursor);
       maxId = data.next_max_id;
 
-      // Rate limit — 1.0 - 1.5s between pages
-      await sleep(1000 + Math.random() * 500);
+      // Rate limit — 1.0 - 1.5s between pages, 2.5 - 4s for other accounts
+      await sleep(careful ? 2500 + Math.random() * 1500 : 1000 + Math.random() * 500);
+    }
+  }
+
+  // Look one account up in a follow list via the list's own search box.
+  // Returns the fresh record when found, null when it is really gone.
+  async function findInList(userId, type, user) {
+    const url = `/api/v1/friendships/${userId}/${type}/?query=${encodeURIComponent(user.username)}` +
+      `&search_surface=follow_list_page`;
+    const data = await igFetchWithBackoff(url);
+    const id = extractUserId(user);
+    const uname = extractUsername(user);
+    const match = (data?.users || []).find(
+      (u) => (id && extractUserId(u) === id) || (uname && extractUsername(u) === uname)
+    );
+    if (!match) return null;
+    return {
+      id: extractUserId(match) || id || uname,
+      username: match.username || user.username,
+      full_name: match.full_name || user.full_name || '',
+    };
+  }
+
+  // Everyone in the previous scan who is missing from this one is either a
+  // real unfollow or an account Instagram skipped. Check each one directly and
+  // put the skipped ones back, so a missing page never reads as an unfollow.
+  // Accounts we couldn't check (cap reached, request failed) are carried over
+  // unchanged and checked again on the next scan.
+  const MAX_VERIFY = 200;
+  const MAX_VERIFY_OTHERS = 50;
+
+  async function reconcileWithPrevious(userId, type, list, previous, isSelf = null) {
+    const stats = { missing: 0, restored: 0, removed: 0, unverified: 0 };
+    if (!previous?.length) return stats;
+    const careful = isSelf === false;
+    const maxVerify = careful ? MAX_VERIFY_OTHERS : MAX_VERIFY;
+
+    // A scan that came back far short is truncation, not mass unfollowing.
+    // Checking hundreds of accounts one by one would just get us rate-limited,
+    // so keep everyone and leave the snapshot marked incomplete.
+    const skipChecks = list.isComplete === false;
+
+    const ids = new Set();
+    const usernames = new Set();
+    for (const u of list) {
+      const id = extractUserId(u);
+      const uname = extractUsername(u);
+      if (id) ids.add(id);
+      if (uname) usernames.add(uname);
     }
 
-    if (total && total > 5 && list.length === 0) {
-      throw new Error('FETCH_INCOMPLETE');
+    const missing = previous.filter((p) => {
+      const id = extractUserId(p);
+      const uname = extractUsername(p);
+      if (id && ids.has(id)) return false;
+      if (uname && usernames.has(uname)) return false;
+      return Boolean(id || uname);
+    });
+    stats.missing = missing.length;
+
+    let stopChecking = false;
+    for (let i = 0; i < missing.length; i++) {
+      const user = missing[i];
+
+      if (skipChecks || stopChecking || i >= maxVerify || !user.username) {
+        list.push({ id: extractUserId(user) || extractUsername(user), username: user.username, full_name: user.full_name || '' });
+        stats.unverified++;
+        continue;
+      }
+
+      chrome.runtime.sendMessage({
+        type: 'FETCH_PROGRESS',
+        progress: { type, phase: 'verify', fetched: i + 1, total: Math.min(missing.length, maxVerify) },
+      }).catch(() => {});
+
+      try {
+        const found = await findInList(userId, type, user);
+        if (found) {
+          list.push(found);
+          stats.restored++;
+        } else {
+          stats.removed++;
+        }
+      } catch (err) {
+        console.warn(`[IG Tracker] verify @${user.username} failed:`, err.message);
+        list.push({ id: extractUserId(user) || extractUsername(user), username: user.username, full_name: user.full_name || '' });
+        stats.unverified++;
+        if (isAuthOrRateLimitError(err)) stopChecking = true;
+      }
+
+      await sleep(careful ? 1500 + Math.random() * 1000 : 400 + Math.random() * 400);
     }
 
-    const expectedTotal = total || 0;
-    const allowedDiscrepancy = Math.max(5, Math.round(expectedTotal * 0.1));
-    const isComplete = expectedTotal <= 15 ? true : (list.length >= (expectedTotal - allowedDiscrepancy));
-
-    list.isComplete = isComplete;
-    list.fetchedCount = list.length;
-    list.expectedCount = expectedTotal;
-
-    return list;
+    if (!skipChecks) list.isComplete = isListComplete(list.length, list.expectedCount || 0);
+    console.log(`[IG Tracker] ${type} verify:`, stats);
+    return stats;
   }
 
   // Message handler
@@ -418,12 +535,16 @@
           }
 
           console.log('[IG Tracker] Fetching followers...');
-          const followers = await fetchList(userInfo.id, 'followers', userInfo.follower_count);
+          const followers = await fetchList(userInfo.id, 'followers', userInfo.follower_count, isSelf);
           console.log(`[IG Tracker] Got ${followers.length} followers (complete: ${followers.isComplete})`);
 
           console.log('[IG Tracker] Fetching following...');
-          const following = await fetchList(userInfo.id, 'following', userInfo.following_count);
+          const following = await fetchList(userInfo.id, 'following', userInfo.following_count, isSelf);
           console.log(`[IG Tracker] Got ${following.length} following (complete: ${following.isComplete})`);
+
+          const previous = msg.previous || {};
+          const followersVerify = await reconcileWithPrevious(userInfo.id, 'followers', followers, previous.followers, isSelf);
+          const followingVerify = await reconcileWithPrevious(userInfo.id, 'following', following, previous.following, isSelf);
 
           chrome.runtime.sendMessage({
             type: 'FETCH_SUCCESS',
@@ -436,6 +557,8 @@
                 isFollowingComplete: following.isComplete,
                 followersFetched: followers.length,
                 followingFetched: following.length,
+                followersVerify,
+                followingVerify,
               },
             },
           });
@@ -464,5 +587,5 @@
     return false;
   });
 
-  console.log('[IG Tracker] Content script v8 | AppID:', getAppId());
+  console.log('[IG Tracker] Content script v9 | AppID:', getAppId());
 })();
