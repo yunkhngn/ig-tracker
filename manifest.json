@@ -1,12 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "Who Unfollowed You for Instagram™",
-  "version": "1.0.0",
-  "description": "Track who unfollowed you and analyze follower changes on Instagram locally and securely. Disclaimer: Independent tool, not affiliated with Instagram or Meta.",
+  "name": "Who Unfollowed You",
+  "version": "1.1.0",
+  "description": "Track who unfollowed you and follower changes on Instagram. Data stays on your device. Not affiliated with Instagram or Meta.",
   "permissions": [
     "storage",
-    "unlimitedStorage",
-    "tabs"
+    "unlimitedStorage"
   ],
   "host_permissions": [
     "https://*.instagram.com/*"

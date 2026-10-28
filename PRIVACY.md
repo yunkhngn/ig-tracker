@@ -1,6 +1,6 @@
 # Privacy Policy for Who Unfollowed You for Instagram™
 
-*Last updated: October 22, 2026*
+*Last updated: October 28, 2026*
 
 **Who Unfollowed You for Instagram™** ("we", "our", or "the extension") is an independent browser extension committed to protecting your privacy. This Privacy Policy explains our practices regarding user data.
 
@@ -18,7 +18,6 @@
 ### 3. Permissions Explanation
 The extension requests only the minimum permissions necessary to function:
 - **`storage` & `unlimitedStorage`:** To save your follower snapshots locally so you can compare changes between scans.
-- **`tabs`:** To communicate with your active `instagram.com` tab or open an Instagram tab in the background to execute the local scan.
 - **Host Permissions (`https://*.instagram.com/*`):** To read follower and following lists directly from your authenticated browser session.
 
 ### 4. Third-Party Services & Disclaimer
